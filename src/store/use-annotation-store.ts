@@ -10,7 +10,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 	knowledgeUnits: [],
 	selectedDocumentId: null,
 	activeHighlightFieldId: null,
-	highlights: [], // Added highlights property to match AnnotationStore type
+	// highlights: [], // Added highlights property to match AnnotationStore type
 
 	// Actions
 	selectDocument: (documentId) => {

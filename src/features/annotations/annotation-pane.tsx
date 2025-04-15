@@ -44,6 +44,7 @@ const AnnotationPanel = () => {
 	// Handle adding a new KU
 	const handleAddKU = (schemaId: string) => {
 		addKnowledgeUnit(schemaId);
+		console.log('After addKnowledgeUnit:', useAnnotationStore.getState());
 		handleCloseMenu();
 	};
 

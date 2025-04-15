@@ -36,8 +36,11 @@ const FieldInput = ({
 	const { type, name, id, multiple, required } = field;
 
 	// Get field value from store
-	const updateFieldValue = useAnnotationStore(
-		useShallow((state) => state.updateFieldValue)
+	const { updateFieldValue, removeFieldFromKU } = useAnnotationStore(
+		useShallow((state) => ({
+			updateFieldValue: state.updateFieldValue,
+			removeFieldFromKU: state.removeFieldFromKU,
+		}))
 	);
 
 	// Function to handle field type rendering
@@ -225,19 +228,34 @@ const FieldInput = ({
 		);
 	};
 
+	const handleHighlightFieldClick = () => {
+		const highlightFieldId =
+			useAnnotationStore.getState().activeHighlightFieldId;
+		if (highlightFieldId === id) {
+			setActiveHighlightField(null);
+		} else {
+			setActiveHighlightField(id);
+		}
+	};
+
 	return (
 		<Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
 			<Box sx={{ flexGrow: 1 }}>{renderFieldInput()}</Box>
 			<IconButton
 				sx={{ ml: 1 }}
 				color='primary'
-				onClick={() => setActiveHighlightField(id)}
+				onClick={handleHighlightFieldClick}
 				aria-label='Highlight evidence'
 			>
 				<HighlightIcon />
 			</IconButton>
 			{!required && (
-				<IconButton sx={{ ml: 1 }} color='error' aria-label='Remove field'>
+				<IconButton
+					sx={{ ml: 1 }}
+					color='error'
+					onClick={() => removeFieldFromKU(kuId, id)}
+					aria-label='Remove field'
+				>
 					<DeleteIcon />
 				</IconButton>
 			)}
@@ -248,11 +266,13 @@ const FieldInput = ({
 // Main KU Form component
 const KnowledgeUnitForm = ({ kuId, schemaId }) => {
 	const { knowledgeUnits, knowledgeUnitSchemas, setActiveHighlightField } =
-		useAnnotationStore(useShallow((state) => ({
-			knowledgeUnits: state.knowledgeUnits,
-			knowledgeUnitSchemas: state.knowledgeUnitSchemas,
-			setActiveHighlightField: state.setActiveHighlightField,
-		})));
+		useAnnotationStore(
+			useShallow((state) => ({
+				knowledgeUnits: state.knowledgeUnits,
+				knowledgeUnitSchemas: state.knowledgeUnitSchemas,
+				setActiveHighlightField: state.setActiveHighlightField,
+			}))
+		);
 
 	// Find the KU and its schema
 	const ku = knowledgeUnits.find((ku) => ku.id === kuId);

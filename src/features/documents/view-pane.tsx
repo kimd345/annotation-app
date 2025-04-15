@@ -113,6 +113,7 @@ const DocumentView = () => {
 
 		// Clear the selection
 		selection.removeAllRanges();
+		console.log('After addHighlight:', useAnnotationStore.getState());
 	};
 
 	// Helper function to calculate text offset within the document
@@ -235,6 +236,9 @@ const DocumentView = () => {
 					lineHeight: 1.5,
 					whiteSpace: 'pre-wrap',
 					cursor: activeHighlightFieldId ? 'cell' : 'text',
+					textAlign: 'left',
+					// TODO: Add word wrapping
+					// wordWrap: 'break-word',
 				}}
 				onMouseUp={activeHighlightFieldId ? handleTextSelection : undefined}
 			>

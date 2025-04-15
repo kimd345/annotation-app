@@ -50,7 +50,7 @@ export interface AnnotationStore {
   documents: Document[];
   knowledgeUnitSchemas: KnowledgeUnitSchema[];
   knowledgeUnits: KnowledgeUnit[];
-  highlights: Highlight[];
+  // highlights: Highlight[];
   
   // UI state
   selectedDocumentId: string | null;
