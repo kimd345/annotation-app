@@ -1,18 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { ReactElement, useRef } from 'react';
 import { Paper, Typography, Box } from '@mui/material';
-import useAnnotationStore from '../../store/use-annotation-store';
 import { useShallow } from 'zustand/shallow';
-
-// Generate a color based on field ID (simplified version)
-const getColorForField = (fieldId: string) => {
-	// Simple hash function to generate a color
-	const hash = fieldId.split('').reduce((acc, char) => {
-		return char.charCodeAt(0) + ((acc << 5) - acc);
-	}, 0);
-
-	const h = Math.abs(hash) % 360;
-	return `hsl(${h}, 70%, 80%)`;
-};
+import useAnnotationStore from '@/store/use-annotation-store';
+import { getColorForField } from '@/utils/format';
 
 const DocumentView = () => {
 	const containerRef = useRef<HTMLDivElement | null>(null);
@@ -95,7 +85,6 @@ const DocumentView = () => {
 		if (!activeKU) return;
 
 		// Calculate text offsets
-		const documentText = selectedDocument?.content || '';
 		const startContainer = range.startContainer;
 		const startOffset = getTextOffset(
 			container,
@@ -156,11 +145,22 @@ const DocumentView = () => {
 		);
 
 		if (highlights.length === 0) {
-			return <pre>{content}</pre>;
+			return (
+				<pre
+					style={{
+						whiteSpace: 'pre-wrap',
+						wordWrap: 'break-word',
+						// overflowX: 'hidden',
+						width: '100%',
+					}}
+				>
+					{content}
+				</pre>
+			);
 		}
 
 		// Create segments with highlights
-		const segments: JSX.Element[] = [];
+		const segments: ReactElement[] = [];
 		let lastIndex = 0;
 
 		highlights.forEach((highlight, index) => {
@@ -202,7 +202,17 @@ const DocumentView = () => {
 			);
 		}
 
-		return <pre>{segments}</pre>;
+		return (
+			<pre
+				style={{
+					whiteSpace: 'pre-wrap',
+					wordWrap: 'break-word',
+					width: '100%',
+				}}
+			>
+				{segments}
+			</pre>
+		);
 	};
 
 	return (
@@ -237,10 +247,10 @@ const DocumentView = () => {
 					fontSize: '14px',
 					lineHeight: 1.5,
 					whiteSpace: 'pre-wrap',
+					// wordWrap: 'break-word', // Add this to force long words to break
+					// overflowX: 'hidden', // Add this to prevent horizontal scrolling
 					cursor: activeHighlightFieldId ? 'cell' : 'text',
 					textAlign: 'left',
-					// TODO: Add word wrapping
-					// wordWrap: 'break-word',
 				}}
 				onMouseUp={activeHighlightFieldId ? handleTextSelection : undefined}
 			>

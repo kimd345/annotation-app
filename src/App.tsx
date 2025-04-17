@@ -1,5 +1,5 @@
 import React from 'react';
-import { CssBaseline, Box, ThemeProvider, createTheme } from '@mui/material';
+import { Box } from '@mui/material';
 import DocumentList from './features/documents/list-pane';
 import DocumentView from './features/documents/view-pane';
 import AnnotationPanel from './features/annotations/annotation-pane';
@@ -28,21 +28,21 @@ function App() {
 			<Box
 				sx={{
 					display: 'flex',
-					height: '100vh',
+					height: '90vh',	// TODO: Fix responsiveness
 					overflow: 'hidden',
 					backgroundColor: '#f5f5f5',
 				}}
 			>
 				{/* Three-panel layout */}
-				<Box sx={{ width: '20%', p: 1, height: '100%' }}>
+				<Box sx={{ width: '20%', height: '100%' }}>
 					<DocumentList />
 				</Box>
 
-				<Box sx={{ width: '45%', p: 1, height: '100%' }}>
+				<Box sx={{ width: '45%', height: '100%' }}>
 					<DocumentView />
 				</Box>
 
-				<Box sx={{ width: '35%', p: 1, height: '100%' }}>
+				<Box sx={{ width: '35%', height: '100%' }}>
 					<AnnotationPanel />
 				</Box>
 			</Box>

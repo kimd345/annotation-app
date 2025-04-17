@@ -3,6 +3,7 @@ export interface Document {
 	id: string;
 	title: string;
 	content: string;
+	fileName: string;
 	hasAnnotations: boolean;
 }
 
@@ -12,7 +13,7 @@ export interface Field {
 	type: string | string[];
 	required: boolean;
 	multiple: boolean;
-	value?: any;
+	value?: unknown;
 	highlights: Highlight[];
 }
 
@@ -59,11 +60,11 @@ export interface AnnotationStore {
   // Actions
   selectDocument: (documentId: string) => void;
   addKnowledgeUnit: (schemaId: string) => void;
-  updateFieldValue: (kuId: string, fieldId: string, value: any) => void;
+  updateFieldValue: (kuId: string, fieldId: string, value: unknown) => void;
   addFieldToKU: (kuId: string, fieldId: string) => void;
   removeFieldFromKU: (kuId: string, fieldId: string) => void;
   setActiveHighlightField: (fieldId: string | null) => void;
   addHighlight: (highlight: Omit<Highlight, 'id'>) => void;
   removeHighlight: (highlightId: string) => void;
-  exportAnnotations: () => Record<string, any>;
+  exportAnnotations: () => Record<string, unknown>;
 }

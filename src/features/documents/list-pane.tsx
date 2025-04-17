@@ -1,4 +1,3 @@
-import React from 'react';
 import {
 	Paper,
 	List,
@@ -12,8 +11,8 @@ import {
 import FolderIcon from '@mui/icons-material/Folder';
 import DescriptionIcon from '@mui/icons-material/Description';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
-import useAnnotationStore from '../../store/use-annotation-store';
 import { useShallow } from 'zustand/shallow';
+import useAnnotationStore from '@/store/use-annotation-store';
 
 const DocumentList = () => {
 	const { documents, selectedDocumentId, selectDocument } = useAnnotationStore(
@@ -89,9 +88,16 @@ const DocumentList = () => {
 											/>
 											<ListItemText
 												primary={doc.title}
-												primaryTypographyProps={{
-													noWrap: true,
-													fontSize: '0.9rem',
+												secondary={doc.fileName}
+												slotProps={{
+													primary: {
+														noWrap: true,
+														fontSize: '0.9rem',
+													},
+													secondary: {
+														noWrap: true,
+														fontSize: '0.7rem',
+													},
 												}}
 											/>
 										</ListItemButton>
@@ -108,7 +114,11 @@ const DocumentList = () => {
 								<ListItem>
 									<ListItemText
 										primary='Available Documents'
-										primaryTypographyProps={{ variant: 'subtitle2' }}
+										slotProps={{
+											primary: {
+												variant: 'subtitle2',
+											}
+										}}
 									/>
 								</ListItem>
 
@@ -132,9 +142,16 @@ const DocumentList = () => {
 											/>
 											<ListItemText
 												primary={doc.title}
-												primaryTypographyProps={{
-													noWrap: true,
-													fontSize: '0.9rem',
+												secondary={doc.fileName}
+												slotProps={{
+													primary: {
+														noWrap: true,
+														fontSize: '0.9rem',
+													},
+													secondary: {
+														noWrap: true,
+														fontSize: '0.7rem',
+													},
 												}}
 											/>
 										</ListItemButton>

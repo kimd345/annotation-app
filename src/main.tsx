@@ -2,7 +2,7 @@ import { createTheme, ThemeProvider } from '@mui/material';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import App from './App.tsx';
+import App from './App';
 
 // TODO: Customize theme if time allows
 const theme = createTheme({});
