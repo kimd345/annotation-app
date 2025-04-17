@@ -74,6 +74,8 @@ const DocumentView = () => {
 	// Handle text selection for highlighting
 	const handleTextSelection = () => {
 		if (!activeHighlightFieldId || !selectedDocumentId) return;
+		// Prevent selection by double-clicking on the highlight
+		// if (window.getSelection()?.toString().length > 0) return;
 
 		const selection = window.getSelection();
 		if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
