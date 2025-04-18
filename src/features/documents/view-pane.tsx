@@ -12,16 +12,24 @@ const DocumentView = () => {
 		documents,
 		knowledgeUnits,
 		activeHighlightFieldId,
-		setActiveHighlightField,
+		hoveredFieldId,
 		addHighlight,
-	} = useAnnotationStore(useShallow((state) => ({
-		selectedDocumentId: state.selectedDocumentId,
-		documents: state.documents,
-		knowledgeUnits: state.knowledgeUnits,
-		activeHighlightFieldId: state.activeHighlightFieldId,
-		setActiveHighlightField: state.setActiveHighlightField,
-		addHighlight: state.addHighlight,
-	})));
+		setActiveHighlightField,
+		setHoveredField,
+		findFieldByHighlightId,
+	} = useAnnotationStore(
+		useShallow((state) => ({
+			selectedDocumentId: state.selectedDocumentId,
+			documents: state.documents,
+			knowledgeUnits: state.knowledgeUnits,
+			activeHighlightFieldId: state.activeHighlightFieldId,
+			hoveredFieldId: state.hoveredFieldId,
+			addHighlight: state.addHighlight,
+			setActiveHighlightField: state.setActiveHighlightField,
+			setHoveredField: state.setHoveredField,
+			findFieldByHighlightId: state.findFieldByHighlightId,
+		}))
+	);
 
 	// Find the selected document
 	const selectedDocument = documents.find(
@@ -61,11 +69,22 @@ const DocumentView = () => {
 		return highlights;
 	};
 
+	// Function to scroll to a field in the annotation pane
+	const scrollToField = (fieldId: string) => {
+		// Find the field element by id
+		const fieldElement = document.querySelector(`[data-field-id="${fieldId}"]`);
+		if (fieldElement) {
+			// Scroll the field into view with a smooth animation
+			fieldElement.scrollIntoView({
+				behavior: 'smooth',
+				block: 'center',
+			});
+		}
+	};
+
 	// Handle text selection for highlighting
 	const handleTextSelection = () => {
 		if (!activeHighlightFieldId || !selectedDocumentId) return;
-		// Prevent selection by double-clicking on the highlight
-		// if (window.getSelection()?.toString().length > 0) return;
 
 		const selection = window.getSelection();
 		if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
@@ -104,7 +123,18 @@ const DocumentView = () => {
 
 		// Clear the selection
 		selection.removeAllRanges();
-		console.log('After addHighlight:', useAnnotationStore.getState());
+	};
+
+	// Handle clicking on a highlight
+	const handleHighlightClick = (highlightId: string) => {
+		const highlightData = findFieldByHighlightId(highlightId);
+		if (highlightData) {
+			// Set active highlight field
+			setActiveHighlightField(highlightData.fieldId);	// Field's id
+
+			// Scroll to and focus the field
+			scrollToField(highlightData.fieldId);
+		}
 	};
 
 	// Helper function to calculate text offset within the document
@@ -150,7 +180,6 @@ const DocumentView = () => {
 					style={{
 						whiteSpace: 'pre-wrap',
 						wordWrap: 'break-word',
-						// overflowX: 'hidden',
 						width: '100%',
 					}}
 				>
@@ -173,20 +202,38 @@ const DocumentView = () => {
 				);
 			}
 
-			// Add the highlighted text
+			// Determine highlight display state
 			const isActiveHighlight = activeHighlightFieldId === highlight.fieldId;
+			const isHoveredHighlight = hoveredFieldId === highlight.fieldId;
 			const highlightColor = getColorForField(highlight.fieldId);
 
+			// Style based on state (active/hovered/normal)
+			let backgroundColor = 'rgba(200, 200, 200, 0.3)'; // Default color
+			let opacity = 0.7;
+
+			if (isActiveHighlight) {
+				backgroundColor = highlightColor;
+				opacity = 0.8;
+			} else if (isHoveredHighlight) {
+				backgroundColor = highlightColor;
+				opacity = 0.5;
+			}
+
+			// Add the highlighted text
 			segments.push(
 				<span
 					key={`highlight-${highlight.id}`}
 					style={{
-						backgroundColor: isActiveHighlight
-							? highlightColor
-							: 'rgba(200, 200, 200, 0.3)',
+						backgroundColor,
+						opacity,
 						cursor: 'pointer',
+						padding: '2px 0',
+						borderRadius: '2px',
+						transition: 'all 0.2s ease',
 					}}
-					onClick={() => setActiveHighlightField(highlight.fieldId)}
+					onClick={() => handleHighlightClick(highlight.id)}
+					onMouseEnter={() => setHoveredField(highlight.fieldId)}
+					onMouseLeave={() => setHoveredField(null)}
 				>
 					{content.substring(highlight.startOffset, highlight.endOffset)}
 				</span>
@@ -247,8 +294,6 @@ const DocumentView = () => {
 					fontSize: '14px',
 					lineHeight: 1.5,
 					whiteSpace: 'pre-wrap',
-					// wordWrap: 'break-word', // Add this to force long words to break
-					// overflowX: 'hidden', // Add this to prevent horizontal scrolling
 					cursor: activeHighlightFieldId ? 'cell' : 'text',
 					textAlign: 'left',
 				}}

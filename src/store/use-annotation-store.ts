@@ -10,7 +10,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 	knowledgeUnits: [],
 	selectedDocumentId: null,
 	activeHighlightFieldId: null,
-	// highlights: [], // Added highlights property to match AnnotationStore type
+	hoveredFieldId: null, // Add this to track hovered field
 
 	// Actions
 	selectDocument: (documentId) => {
@@ -103,6 +103,11 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		set({ activeHighlightFieldId: fieldId });
 	},
 
+	// Add this new function to handle hover state
+	setHoveredField: (fieldId) => {
+		set({ hoveredFieldId: fieldId });
+	},
+
 	addHighlight: (highlight) => {
 		const highlightWithId = { ...highlight, id: uuidv4() };
 
@@ -135,6 +140,20 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 				})),
 			})),
 		}));
+	},
+
+	// Add this new function to find the KU and field for a highlight
+	findFieldByHighlightId: (highlightId) => {
+		const { knowledgeUnits } = get();
+		for (const ku of knowledgeUnits) {
+			for (const field of ku.fields) {
+				const highlight = field.highlights.find((h) => h.id === highlightId);
+				if (highlight) {
+					return { kuId: ku.id, fieldId: field.id, highlight };
+				}
+			}
+		}
+		return null;
 	},
 
 	exportAnnotations: () => {

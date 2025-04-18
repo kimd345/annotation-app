@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import {
+	useForm,
+	Controller,
+	Control,
+	FieldErrors,
+} from 'react-hook-form';
 import {
 	Box,
 	Typography,
@@ -8,21 +13,21 @@ import {
 	Card,
 	CardContent,
 	Select,
+	Menu,
 	MenuItem,
 	FormControl,
 	FormHelperText,
 	IconButton,
 	Autocomplete,
-	FormLabel,
 	Chip,
-	Stack,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HighlightIcon from '@mui/icons-material/Highlight';
-import useAnnotationStore from '../../store/use-annotation-store';
-import { dynamicLists } from '../../lib/mock-data';
 import { useShallow } from 'zustand/shallow';
+import useAnnotationStore from '@/store/use-annotation-store';
+import { dynamicLists } from '@/lib/mock-data';
+import { getColorForField } from '@/utils/format';
 
 // Custom field types renderer
 const FieldInput = ({
@@ -32,16 +37,58 @@ const FieldInput = ({
 	index,
 	kuId,
 	setActiveHighlightField,
+}: {
+	field: {
+		type: string | string[];
+		name: string;
+		id: string;
+		multiple?: boolean;
+		required?: boolean;
+	};
+	control: Control;
+	errors: FieldErrors<{ fields: { value: unknown }[] }>;
+	index: number;
+	kuId: string;
+	setActiveHighlightField: (id: string | null) => void;
 }) => {
 	const { type, name, id, multiple, required } = field;
 
 	// Get field value from store
-	const { updateFieldValue, removeFieldFromKU } = useAnnotationStore(
+	const {
+		updateFieldValue,
+		removeFieldFromKU,
+		setHoveredField,
+		knowledgeUnits,
+		activeHighlightFieldId,
+	} = useAnnotationStore(
 		useShallow((state) => ({
 			updateFieldValue: state.updateFieldValue,
 			removeFieldFromKU: state.removeFieldFromKU,
+			setHoveredField: state.setHoveredField,
+			knowledgeUnits: state.knowledgeUnits,
+			activeHighlightFieldId: state.activeHighlightFieldId,
 		}))
 	);
+
+	// Function to get field highlights count
+	const getFieldHighlights = () => {
+		const ku = knowledgeUnits.find((ku) => ku.id === kuId);
+		if (!ku) return [];
+
+		const fieldData = ku.fields.find((f) => f.id === id);
+		return fieldData?.highlights || [];
+	};
+
+	// Get the field's highlight state
+	const fieldHighlights = getFieldHighlights();
+	const hasHighlights = fieldHighlights.length > 0;
+	const isActive = activeHighlightFieldId === id;
+
+	// Get field color for highlights
+	const getFieldColor = () => {
+		// Import the color utility function
+		return getColorForField(id);
+	};
 
 	// Function to handle field type rendering
 	const renderFieldInput = () => {
@@ -59,12 +106,14 @@ const FieldInput = ({
 							fullWidth
 							size='small'
 							label={name}
-							error={!!errors.fields?.[index]?.value}
+							error={!!errors.fields?.[index]?.value?.message}
 							helperText={errors.fields?.[index]?.value?.message}
 							onChange={(e) => {
 								renderField.onChange(e);
 								updateFieldValue(kuId, id, e.target.value);
 							}}
+							onMouseEnter={() => setHoveredField(id)}
+							onMouseLeave={() => setHoveredField(null)}
 						/>
 					)}
 				/>
@@ -98,6 +147,8 @@ const FieldInput = ({
 								renderField.onChange(e);
 								updateFieldValue(kuId, id, parseInt(e.target.value, 10));
 							}}
+							onMouseEnter={() => setHoveredField(id)}
+							onMouseLeave={() => setHoveredField(null)}
 						/>
 					)}
 				/>
@@ -157,6 +208,8 @@ const FieldInput = ({
 									);
 									return filtered;
 								}}
+								onMouseEnter={() => setHoveredField(id)}
+								onMouseLeave={() => setHoveredField(null)}
 							/>
 						)}
 					/>
@@ -174,6 +227,8 @@ const FieldInput = ({
 								fullWidth
 								size='small'
 								error={!!errors.fields?.[index]?.value}
+								onMouseEnter={() => setHoveredField(id)}
+								onMouseLeave={() => setHoveredField(null)}
 							>
 								<Select
 									{...renderField}
@@ -239,13 +294,25 @@ const FieldInput = ({
 	};
 
 	return (
-		<Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+		<Box
+			sx={{ display: 'flex', alignItems: 'center', mb: 2 }}
+			onMouseEnter={() => setHoveredField(id)}
+			onMouseLeave={() => setHoveredField(null)}
+		>
 			<Box sx={{ flexGrow: 1 }}>{renderFieldInput()}</Box>
 			<IconButton
-				sx={{ ml: 1 }}
-				color='primary'
+				sx={{
+					ml: 1,
+					// Apply border when active
+					border: isActive ? 2 : 0,
+					borderColor: isActive ? 'primary.main' : 'transparent',
+					// Handle icon color based on highlights
+					color: hasHighlights ? getFieldColor() : 'black',
+				}}
 				onClick={handleHighlightFieldClick}
 				aria-label='Highlight evidence'
+				onMouseEnter={() => setHoveredField(id)}
+				onMouseLeave={() => setHoveredField(null)}
 			>
 				<HighlightIcon />
 			</IconButton>
@@ -255,6 +322,8 @@ const FieldInput = ({
 					color='error'
 					onClick={() => removeFieldFromKU(kuId, id)}
 					aria-label='Remove field'
+					onMouseEnter={() => setHoveredField(id)}
+					onMouseLeave={() => setHoveredField(null)}
 				>
 					<DeleteIcon />
 				</IconButton>
@@ -264,7 +333,13 @@ const FieldInput = ({
 };
 
 // Main KU Form component
-const KnowledgeUnitForm = ({ kuId, schemaId }) => {
+const KnowledgeUnitForm = ({
+	kuId,
+	schemaId,
+}: {
+	kuId: string;
+	schemaId: string;
+}) => {
 	const { knowledgeUnits, knowledgeUnitSchemas, setActiveHighlightField } =
 		useAnnotationStore(
 			useShallow((state) => ({
@@ -278,23 +353,23 @@ const KnowledgeUnitForm = ({ kuId, schemaId }) => {
 	const ku = knowledgeUnits.find((ku) => ku.id === kuId);
 	const schema = knowledgeUnitSchemas.find((s) => s.frameId === schemaId);
 
-	const [showOptionFields, setShowOptionFields] = useState(false);
-
-	// If KU or schema not found, return error
-	if (!ku || !schema) {
-		return <Typography color='error'>Knowledge Unit not found</Typography>;
-	}
-
 	// Setup form
 	const {
 		control,
 		handleSubmit,
 		formState: { errors },
-	} = useForm({
+	} = useForm<{ fields: { id: string; value: unknown }[] }>({
 		defaultValues: {
-			fields: ku.fields,
+			fields: ku?.fields,
 		},
 	});
+
+	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+	// If KU or schema not found, return error
+	if (!ku || !schema) {
+		return <Typography color='error'>Knowledge Unit not found</Typography>;
+	}
 
 	// Get optional fields not yet added
 	const availableOptionalFields = schema.fields.filter(
@@ -304,16 +379,22 @@ const KnowledgeUnitForm = ({ kuId, schemaId }) => {
 	);
 
 	// Handle adding an optional field
-	const handleAddField = (fieldId) => {
+	const handleAddField = (fieldId: string) => {
 		const addFieldToKU = useAnnotationStore.getState().addFieldToKU;
 		addFieldToKU(kuId, fieldId);
-		setShowOptionFields(false);
+		handleCloseMenu();
 	};
 
+	// Handle opening KU type menu
+	const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) =>
+		setAnchorEl(event.currentTarget);
+
+	// Handle closing KU type menu
+	const handleCloseMenu = () => setAnchorEl(null);
+
 	// Handle form submission
-	const onSubmit = (data) => {
+	const onSubmit = (data: unknown) => {
 		console.log('Form submitted:', data);
-		// You can trigger validation and export here
 	};
 
 	return (
@@ -326,45 +407,46 @@ const KnowledgeUnitForm = ({ kuId, schemaId }) => {
 				<form onSubmit={handleSubmit(onSubmit)}>
 					{/* Render existing fields */}
 					{ku.fields.map((field, index) => (
-						<FieldInput
-							key={field.id}
-							field={field}
-							index={index}
-							control={control}
-							errors={errors}
-							kuId={kuId}
-							setActiveHighlightField={setActiveHighlightField}
-						/>
+						<Box key={field.id} data-field-id={field.id}>
+							<FieldInput
+								field={field}
+								index={index}
+								// @ts-expect-error TODO: Fix type error
+								control={control}
+								errors={errors}
+								kuId={kuId}
+								setActiveHighlightField={setActiveHighlightField}
+							/>
+						</Box>
 					))}
 
 					{/* Add optional field button */}
 					{availableOptionalFields.length > 0 && (
-						<Box sx={{ mb: 2 }}>
+						<Box sx={{ mb: 2, display: 'flex' }}>
 							<Button
 								startIcon={<AddIcon />}
 								size='small'
-								onClick={() => setShowOptionFields(!showOptionFields)}
+								onClick={(e) => handleOpenMenu(e)}
 								variant='outlined'
 							>
 								Add Field
 							</Button>
 
 							{/* Optional fields dropdown */}
-							{showOptionFields && (
-								<Stack spacing={1} sx={{ mt: 1, ml: 2 }}>
-									{availableOptionalFields.map((field) => (
-										<Button
-											key={field.id}
-											size='small'
-											onClick={() => handleAddField(field.id)}
-											variant='text'
-											startIcon={<AddIcon />}
-										>
-											{field.name}
-										</Button>
-									))}
-								</Stack>
-							)}
+							<Menu
+								anchorEl={anchorEl}
+								open={Boolean(anchorEl)}
+								onClose={handleCloseMenu}
+							>
+								{availableOptionalFields.map((field) => (
+									<MenuItem
+										key={field.id}
+										onClick={() => handleAddField(field.id)}
+									>
+										{field.name}
+									</MenuItem>
+								))}
+							</Menu>
 						</Box>
 					)}
 				</form>

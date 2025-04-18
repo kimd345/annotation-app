@@ -47,24 +47,29 @@ export interface KnowledgeUnit {
 
 // Zustand store
 export interface AnnotationStore {
-  // Data
-  documents: Document[];
-  knowledgeUnitSchemas: KnowledgeUnitSchema[];
-  knowledgeUnits: KnowledgeUnit[];
-  // highlights: Highlight[];
-  
-  // UI state
-  selectedDocumentId: string | null;
-  activeHighlightFieldId: string | null;
-  
-  // Actions
-  selectDocument: (documentId: string) => void;
-  addKnowledgeUnit: (schemaId: string) => void;
-  updateFieldValue: (kuId: string, fieldId: string, value: unknown) => void;
-  addFieldToKU: (kuId: string, fieldId: string) => void;
-  removeFieldFromKU: (kuId: string, fieldId: string) => void;
-  setActiveHighlightField: (fieldId: string | null) => void;
-  addHighlight: (highlight: Omit<Highlight, 'id'>) => void;
-  removeHighlight: (highlightId: string) => void;
-  exportAnnotations: () => Record<string, unknown>;
+	// Data
+	documents: Document[];
+	knowledgeUnitSchemas: KnowledgeUnitSchema[];
+	knowledgeUnits: KnowledgeUnit[];
+	// highlights: Highlight[];
+
+	// UI state
+	selectedDocumentId: string | null;
+	activeHighlightFieldId: string | null;
+	hoveredFieldId: string | null;
+	findFieldByHighlightId: (
+		highlightId: string
+	) => { kuId: string; fieldId: string; highlight: Highlight } | null;
+
+	// Actions
+	selectDocument: (documentId: string) => void;
+	addKnowledgeUnit: (schemaId: string) => void;
+	updateFieldValue: (kuId: string, fieldId: string, value: unknown) => void;
+	addFieldToKU: (kuId: string, fieldId: string) => void;
+	removeFieldFromKU: (kuId: string, fieldId: string) => void;
+	setActiveHighlightField: (fieldId: string | null) => void;
+	setHoveredField: (fieldId: string | null) => void;
+	addHighlight: (highlight: Omit<Highlight, 'id'>) => void;
+	removeHighlight: (highlightId: string) => void;
+	exportAnnotations: () => Record<string, unknown>;
 }

@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Button, 
-  Menu, 
-  MenuItem, 
-  Paper, 
-  Divider,
-  List,
-  ListItem,
-  ListItemText
+import {
+	Box,
+	Typography,
+	Button,
+	Menu,
+	MenuItem,
+	Paper,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import useAnnotationStore from '../../store/use-annotation-store';
@@ -24,12 +20,14 @@ const AnnotationPanel = () => {
 		knowledgeUnitSchemas,
 		knowledgeUnits,
 		addKnowledgeUnit,
-	} = useAnnotationStore(useShallow((state) => ({
-		selectedDocumentId: state.selectedDocumentId,
-		knowledgeUnitSchemas: state.knowledgeUnitSchemas,
-		knowledgeUnits: state.knowledgeUnits,
-		addKnowledgeUnit: state.addKnowledgeUnit,
-	})));
+	} = useAnnotationStore(
+		useShallow((state) => ({
+			selectedDocumentId: state.selectedDocumentId,
+			knowledgeUnitSchemas: state.knowledgeUnitSchemas,
+			knowledgeUnits: state.knowledgeUnits,
+			addKnowledgeUnit: state.addKnowledgeUnit,
+		}))
+	);
 
 	// Handle opening KU type menu
 	const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -86,9 +84,9 @@ const AnnotationPanel = () => {
 				{selectedDocumentId && documentKUs.length > 0 && (
 					<Box>
 						{documentKUs.map((ku) => {
-							const schema = knowledgeUnitSchemas.find(
-								(s) => s.frameId === ku.schemaId
-							);
+							// const schema = knowledgeUnitSchemas.find(
+							// 	(s) => s.frameId === ku.schemaId
+							// );
 							return (
 								<KnowledgeUnitForm
 									key={ku.id}
