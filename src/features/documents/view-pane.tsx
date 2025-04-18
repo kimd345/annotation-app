@@ -1,11 +1,17 @@
-import { ReactElement, useRef } from 'react';
-import { Paper, Typography, Box } from '@mui/material';
+import { ReactElement, useCallback, useEffect, useRef, useState } from 'react';
+import { Paper, Typography, Box, Menu, MenuItem } from '@mui/material';
 import { useShallow } from 'zustand/shallow';
+import debounce from 'lodash/debounce';
 import useAnnotationStore from '@/store/use-annotation-store';
 import { getColorForField } from '@/utils/format';
 
 const DocumentView = () => {
 	const containerRef = useRef<HTMLDivElement | null>(null);
+	const [contextMenu, setContextMenu] = useState<{
+		mouseX: number;
+		mouseY: number;
+		highlightId: string;
+	} | null>(null);
 
 	const {
 		selectedDocumentId,
@@ -17,6 +23,7 @@ const DocumentView = () => {
 		setActiveHighlightField,
 		setHoveredField,
 		findFieldByHighlightId,
+		removeHighlight,
 	} = useAnnotationStore(
 		useShallow((state) => ({
 			selectedDocumentId: state.selectedDocumentId,
@@ -28,6 +35,7 @@ const DocumentView = () => {
 			setActiveHighlightField: state.setActiveHighlightField,
 			setHoveredField: state.setHoveredField,
 			findFieldByHighlightId: state.findFieldByHighlightId,
+			removeHighlight: state.removeHighlight,
 		}))
 	);
 
@@ -82,58 +90,39 @@ const DocumentView = () => {
 		}
 	};
 
-	// Handle text selection for highlighting
-	const handleTextSelection = () => {
-		if (!activeHighlightFieldId || !selectedDocumentId) return;
-
-		const selection = window.getSelection();
-		if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
-			return;
-
-		const range = selection.getRangeAt(0);
-		const container = containerRef.current;
-		if (!container) return;
-
-		// Find the active KU that contains the active field
-		const activeKU = knowledgeUnits.find(
-			(ku) =>
-				ku.documentId === selectedDocumentId &&
-				ku.fields.some((field) => field.id === activeHighlightFieldId)
-		);
-
-		if (!activeKU) return;
-
-		// Calculate text offsets
-		const startContainer = range.startContainer;
-		const startOffset = getTextOffset(
-			container,
-			startContainer,
-			range.startOffset
-		);
-		const endOffset = startOffset + range.toString().length;
-
-		// Add the highlight
-		addHighlight({
-			startOffset,
-			endOffset,
-			text: range.toString(),
-			fieldId: activeHighlightFieldId,
-			kuId: activeKU.id,
-		});
-
-		// Clear the selection
-		selection.removeAllRanges();
-	};
-
 	// Handle clicking on a highlight
 	const handleHighlightClick = (highlightId: string) => {
 		const highlightData = findFieldByHighlightId(highlightId);
 		if (highlightData) {
 			// Set active highlight field
-			setActiveHighlightField(highlightData.fieldId);	// Field's id
+			setActiveHighlightField(highlightData.fieldId); // Field's id
 
 			// Scroll to and focus the field
 			scrollToField(highlightData.fieldId);
+		}
+	};
+
+	// Handle right-click on a highlight to show context menu
+	const handleHighlightRightClick = (
+		event: React.MouseEvent,
+		highlightId: string
+	) => {
+		event.preventDefault();
+		setContextMenu({
+			mouseX: event.clientX,
+			mouseY: event.clientY,
+			highlightId: highlightId,
+		});
+	};
+
+	// Handle closing the context menu
+	const handleCloseContextMenu = () => setContextMenu(null);
+
+	// Handle removing a highlight from the context menu
+	const handleRemoveHighlight = () => {
+		if (contextMenu) {
+			removeHighlight(contextMenu.highlightId);
+			handleCloseContextMenu();
 		}
 	};
 
@@ -188,6 +177,18 @@ const DocumentView = () => {
 			);
 		}
 
+		// First, validate that highlights don't overlap
+		// This prevents issues with overlapping/nested highlights
+		for (let i = 0; i < highlights.length - 1; i++) {
+			const current = highlights[i];
+			const next = highlights[i + 1];
+
+			if (current.endOffset > next.startOffset) {
+				console.warn('Overlapping highlights detected:', current, next);
+				// TODO: handle overlapping highlights
+			}
+		}
+
 		// Create segments with highlights
 		const segments: ReactElement[] = [];
 		let lastIndex = 0;
@@ -223,6 +224,7 @@ const DocumentView = () => {
 			segments.push(
 				<span
 					key={`highlight-${highlight.id}`}
+					data-highlight-id={highlight.id}
 					style={{
 						backgroundColor,
 						opacity,
@@ -232,6 +234,7 @@ const DocumentView = () => {
 						transition: 'all 0.2s ease',
 					}}
 					onClick={() => handleHighlightClick(highlight.id)}
+					onContextMenu={(e) => handleHighlightRightClick(e, highlight.id)}
 					onMouseEnter={() => setHoveredField(highlight.fieldId)}
 					onMouseLeave={() => setHoveredField(null)}
 				>
@@ -261,6 +264,116 @@ const DocumentView = () => {
 			</pre>
 		);
 	};
+
+	// Create a debounced version of handleTextSelection
+	const debouncedHandleTextSelection = useCallback(
+		debounce(() => {
+			if (!activeHighlightFieldId || !selectedDocumentId) return;
+
+			const selection = window.getSelection();
+			if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
+				return;
+
+			const range = selection.getRangeAt(0);
+			const container = containerRef.current;
+			if (!container) return;
+
+			// Check if the selection overlaps with existing highlights
+			const highlightElements = container.querySelectorAll(
+				'[data-highlight-id]'
+			);
+			let overlapsHighlight = false;
+
+			// Convert range to DOM range for comparison
+			const selectionRect = range.getBoundingClientRect();
+
+			highlightElements.forEach((el) => {
+				const elRect = el.getBoundingClientRect();
+
+				// Check for overlap between selection and highlight
+				if (
+					!(
+						selectionRect.right < elRect.left ||
+						selectionRect.left > elRect.right ||
+						selectionRect.bottom < elRect.top ||
+						selectionRect.top > elRect.bottom
+					)
+				) {
+					overlapsHighlight = true;
+				}
+			});
+
+			if (overlapsHighlight) {
+				// Don't proceed with highlighting if overlapping
+				selection.removeAllRanges();
+				return;
+			}
+
+			// Find the active KU that contains the active field
+			const activeKU = knowledgeUnits.find(
+				(ku) =>
+					ku.documentId === selectedDocumentId &&
+					ku.fields.some((field) => field.id === activeHighlightFieldId)
+			);
+
+			if (!activeKU) return;
+
+			// Calculate text offsets
+			const startContainer = range.startContainer;
+			const startOffset = getTextOffset(
+				container,
+				startContainer,
+				range.startOffset
+			);
+			const endOffset = startOffset + range.toString().length;
+
+			// Add the highlight
+			addHighlight({
+				startOffset,
+				endOffset,
+				text: range.toString(),
+				fieldId: activeHighlightFieldId,
+				kuId: activeKU.id,
+			});
+
+			// Clear the selection
+			selection.removeAllRanges();
+		}, 300), // 300ms debounce time
+		[
+			activeHighlightFieldId,
+			selectedDocumentId,
+			knowledgeUnits,
+			getTextOffset,
+			addHighlight,
+		]
+	);
+
+	// Add useEffect to prevent double-click selection issues
+	useEffect(() => {
+		// Function to prevent text selection on double-click
+		const preventDoubleClickSelection = (event: MouseEvent) => {
+			// Check if we're in highlight mode and if the target is a highlight
+			if (
+				activeHighlightFieldId &&
+				(event.target as HTMLElement).hasAttribute('data-highlight-id')
+			) {
+				event.preventDefault();
+			}
+		};
+
+		// Add event listener for double-click
+		const container = containerRef.current;
+		if (container) {
+			container.addEventListener('dblclick', preventDoubleClickSelection);
+		}
+
+		// Clean up
+		return () => {
+			if (container) {
+				container.removeEventListener('dblclick', preventDoubleClickSelection);
+			}
+		};
+	}, [activeHighlightFieldId, containerRef.current]);
 
 	return (
 		<Paper
@@ -297,7 +410,9 @@ const DocumentView = () => {
 					cursor: activeHighlightFieldId ? 'cell' : 'text',
 					textAlign: 'left',
 				}}
-				onMouseUp={activeHighlightFieldId ? handleTextSelection : undefined}
+				onMouseUp={
+					activeHighlightFieldId ? debouncedHandleTextSelection : undefined
+				}
 			>
 				{!selectedDocument && (
 					<Typography color='text.secondary' align='center' sx={{ py: 4 }}>
@@ -307,6 +422,29 @@ const DocumentView = () => {
 
 				{selectedDocument && renderDocumentWithHighlights()}
 			</Box>
+
+			{/* Context Menu for Highlights */}
+			<Menu
+				open={contextMenu !== null}
+				onClose={handleCloseContextMenu}
+				anchorReference='anchorPosition'
+				anchorPosition={
+					contextMenu !== null
+						? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+						: undefined
+				}
+				// Add these properties to fix accessibility issues
+				disableRestoreFocus
+				disablePortal
+				keepMounted={false}
+			>
+				<MenuItem
+					onClick={handleRemoveHighlight}
+					dense // Add this to ensure focus is properly managed
+				>
+					Remove Highlight
+				</MenuItem>
+			</Menu>
 		</Paper>
 	);
 };
