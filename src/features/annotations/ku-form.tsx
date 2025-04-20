@@ -1,462 +1,497 @@
-import { ReactElement, useCallback, useEffect, useRef, useState } from 'react';
-import { Paper, Typography, Box, Menu, MenuItem } from '@mui/material';
+import React, { useState } from 'react';
+import {
+	useForm,
+	Controller,
+	Control,
+	FieldErrors,
+} from 'react-hook-form';
+import {
+	Autocomplete,
+	Badge,
+	Box,
+	Button,
+	Card,
+	CardContent,
+	Chip,
+	FormControl,
+	FormHelperText,
+	IconButton,
+	Menu,
+	MenuItem,
+	Select,
+	TextField,
+	Tooltip,
+	Typography,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import ClearIcon from '@mui/icons-material/Clear';
+import DeleteIcon from '@mui/icons-material/Delete';
+import HighlightIcon from '@mui/icons-material/Highlight';
 import { useShallow } from 'zustand/shallow';
-import debounce from 'lodash/debounce';
 import useAnnotationStore from '@/store/use-annotation-store';
+import { dynamicLists } from '@/lib/mock-data';
 import { getColorForField } from '@/utils/format';
 
-const DocumentView = () => {
-	const containerRef = useRef<HTMLDivElement | null>(null);
-	const [contextMenu, setContextMenu] = useState<{
-		mouseX: number;
-		mouseY: number;
-		highlightId: string;
-	} | null>(null);
+// Custom field types renderer
+const FieldInput = ({
+	field,
+	control,
+	errors,
+	index,
+	kuId,
+	setActiveHighlightField,
+}: {
+	field: {
+		type: string | string[];
+		name: string;
+		id: string;
+		multiple?: boolean;
+		required?: boolean;
+		highlights?: Array<{ id: string }>;
+	};
+	control: Control;
+	errors: FieldErrors<{ fields: { value: unknown }[] }>;
+	index: number;
+	kuId: string;
+	setActiveHighlightField: (id: string | null) => void;
+}) => {
+	const { type, name, id, multiple, required } = field;
 
+	// Get field value and state from store
 	const {
-		selectedDocumentId,
-		documents,
+		updateFieldValue,
+		removeFieldFromKU,
+		setHoveredField,
 		knowledgeUnits,
 		activeHighlightFieldId,
-		hoveredFieldId,
-		addHighlight,
-		setActiveHighlightField,
-		setHoveredField,
-		findFieldByHighlightId,
 		removeHighlight,
 	} = useAnnotationStore(
 		useShallow((state) => ({
-			selectedDocumentId: state.selectedDocumentId,
-			documents: state.documents,
+			updateFieldValue: state.updateFieldValue,
+			removeFieldFromKU: state.removeFieldFromKU,
+			setHoveredField: state.setHoveredField,
 			knowledgeUnits: state.knowledgeUnits,
 			activeHighlightFieldId: state.activeHighlightFieldId,
-			hoveredFieldId: state.hoveredFieldId,
-			addHighlight: state.addHighlight,
-			setActiveHighlightField: state.setActiveHighlightField,
-			setHoveredField: state.setHoveredField,
-			findFieldByHighlightId: state.findFieldByHighlightId,
 			removeHighlight: state.removeHighlight,
 		}))
 	);
 
-	// Find the selected document
-	const selectedDocument = documents.find(
-		(doc) => doc.id === selectedDocumentId
-	);
+	// Function to get field highlights
+	const getFieldHighlights = () => {
+		const ku = knowledgeUnits.find((ku) => ku.id === kuId);
+		if (!ku) return [];
 
-	// Get all highlights for the selected document
-	const getAllHighlights = () => {
-		if (!selectedDocumentId) return [];
-
-		const docKUs = knowledgeUnits.filter(
-			(ku) => ku.documentId === selectedDocumentId
-		);
-
-		const highlights: Array<{
-			id: string;
-			startOffset: number;
-			endOffset: number;
-			fieldId: string;
-			kuId: string;
-		}> = [];
-
-		docKUs.forEach((ku) => {
-			ku.fields.forEach((field) => {
-				field.highlights.forEach((highlight) => {
-					highlights.push({
-						id: highlight.id,
-						startOffset: highlight.startOffset,
-						endOffset: highlight.endOffset,
-						fieldId: field.id,
-						kuId: ku.id,
-					});
-				});
-			});
-		});
-
-		return highlights;
+		const fieldData = ku.fields.find((f) => f.id === id);
+		return fieldData?.highlights || [];
 	};
 
-	// Function to scroll to a field in the annotation pane
-	const scrollToField = (fieldId: string) => {
-		// Find the field element by id
-		const fieldElement = document.querySelector(`[data-field-id="${fieldId}"]`);
-		if (fieldElement) {
-			// Scroll the field into view with a smooth animation
-			fieldElement.scrollIntoView({
-				behavior: 'smooth',
-				block: 'center',
-			});
-		}
-	};
+	// Get the field's highlight state
+	const fieldHighlights = getFieldHighlights();
+	const hasHighlights = fieldHighlights.length > 0;
+	const isActive = activeHighlightFieldId === id;
 
-	// Handle clicking on a highlight
-	const handleHighlightClick = (highlightId: string) => {
-		const highlightData = findFieldByHighlightId(highlightId);
-		if (highlightData) {
-			// Set active highlight field
-			setActiveHighlightField(highlightData.fieldId); // Field's id
+	// Get field color for highlights
+	const getFieldColor = () => getColorForField(id);
 
-			// Scroll to and focus the field
-			scrollToField(highlightData.fieldId);
-		}
-	};
-
-	// Handle right-click on a highlight to show context menu
-	const handleHighlightRightClick = (
-		event: React.MouseEvent,
-		highlightId: string
-	) => {
-		event.preventDefault();
-		setContextMenu({
-			mouseX: event.clientX,
-			mouseY: event.clientY,
-			highlightId: highlightId,
-		});
-	};
-
-	// Handle closing the context menu
-	const handleCloseContextMenu = () => {
-		setContextMenu(null);
-	};
-
-	// Handle removing a highlight from the context menu
-	// Updated to first close the menu, then remove the highlight to prevent focus issues
-	const handleRemoveHighlight = () => {
-		if (contextMenu) {
-			const highlightId = contextMenu.highlightId;
-			handleCloseContextMenu(); // Close menu first
-
-			// Small delay to ensure menu is closed before removing highlight
-			setTimeout(() => {
-				removeHighlight(highlightId);
-			}, 10);
-		}
-	};
-
-	// Helper function to calculate text offset within the document
-	const getTextOffset = (
-		rootNode: Node,
-		targetNode: Node,
-		targetOffset: number
-	): number => {
-		if (!rootNode.firstChild) return 0;
-
-		let offset = 0;
-		const walker = document.createTreeWalker(
-			rootNode,
-			NodeFilter.SHOW_TEXT,
-			null
-		);
-
-		let currentNode = walker.nextNode();
-		while (currentNode) {
-			if (currentNode === targetNode) {
-				return offset + targetOffset;
-			}
-
-			offset += currentNode.textContent?.length || 0;
-			currentNode = walker.nextNode();
-		}
-
-		return offset;
-	};
-
-	// Render document with highlights
-	const renderDocumentWithHighlights = () => {
-		if (!selectedDocument) return null;
-
-		const { content } = selectedDocument;
-		const highlights = getAllHighlights().sort(
-			(a, b) => a.startOffset - b.startOffset
-		);
-
-		if (highlights.length === 0) {
+	// Function to handle field type rendering
+	const renderFieldInput = () => {
+		// Handle string type
+		if (type === 'string') {
 			return (
-				<pre
-					style={{
-						whiteSpace: 'pre-wrap',
-						wordWrap: 'break-word',
-						width: '100%',
-					}}
-				>
-					{content}
-				</pre>
+				<Controller
+					name={`fields.${index}.value`}
+					control={control}
+					defaultValue=''
+					rules={{ required: required ? `${name} is required` : false }}
+					render={({ field: renderField }) => (
+						<TextField
+							{...renderField}
+							fullWidth
+							size='small'
+							label={name}
+							error={!!errors.fields?.[index]?.value?.message}
+							helperText={errors.fields?.[index]?.value?.message}
+							onChange={(e) => {
+								renderField.onChange(e);
+								updateFieldValue(kuId, id, e.target.value);
+							}}
+							onMouseEnter={() => setHoveredField(id)}
+							onMouseLeave={() => setHoveredField(null)}
+						/>
+					)}
+				/>
 			);
 		}
 
-		// First, validate that highlights don't overlap
-		// This prevents issues with overlapping/nested highlights
-		for (let i = 0; i < highlights.length - 1; i++) {
-			const current = highlights[i];
-			const next = highlights[i + 1];
-
-			if (current.endOffset > next.startOffset) {
-				console.warn('Overlapping highlights detected:', current, next);
-				// You may want to handle overlapping highlights here
-				// For now, we'll continue but it's something to address
-			}
+		// Handle integer type
+		if (type === 'integer') {
+			return (
+				<Controller
+					name={`fields.${index}.value`}
+					control={control}
+					defaultValue=''
+					rules={{
+						required: required ? `${name} is required` : false,
+						pattern: {
+							value: /^[0-9]*$/,
+							message: 'Please enter a valid integer',
+						},
+					}}
+					render={({ field: renderField }) => (
+						<TextField
+							{...renderField}
+							fullWidth
+							size='small'
+							label={name}
+							type='number'
+							error={!!errors.fields?.[index]?.value}
+							helperText={errors.fields?.[index]?.value?.message}
+							onChange={(e) => {
+								renderField.onChange(e);
+								updateFieldValue(kuId, id, parseInt(e.target.value, 10));
+							}}
+							onMouseEnter={() => setHoveredField(id)}
+							onMouseLeave={() => setHoveredField(null)}
+						/>
+					)}
+				/>
+			);
 		}
 
-		// Create segments with highlights
-		const segments: ReactElement[] = [];
-		let lastIndex = 0;
+		// Handle dropdown type (array of options)
+		if (Array.isArray(type)) {
+			// Check if it's a dynamic list
+			const isDynamicList = type.some((t) => t.startsWith('DYNAMIC_'));
 
-		highlights.forEach((highlight, index) => {
-			// Add text before the highlight
-			if (highlight.startOffset > lastIndex) {
-				segments.push(
-					<span key={`text-${index}`}>
-						{content.substring(lastIndex, highlight.startOffset)}
-					</span>
+			if (isDynamicList) {
+				// Get all possible options from dynamic lists
+				let options: string[] = [];
+
+				type.forEach((t) => {
+					if (t.startsWith('DYNAMIC_')) {
+						const listName = t as keyof typeof dynamicLists;
+						if (dynamicLists[listName]) {
+							options = [...options, ...dynamicLists[listName]];
+						}
+					} else if (typeof t === 'string' && !t.startsWith('DYNAMIC_')) {
+						options.push(t);
+					}
+				});
+
+				// Render autocomplete for large lists
+				return (
+					<Controller
+						name={`fields.${index}.value`}
+						control={control}
+						defaultValue={multiple ? [] : null}
+						rules={{ required: required ? `${name} is required` : false }}
+						render={({ field: { onChange, value, ...restField } }) => (
+							<Autocomplete
+								{...restField}
+								multiple={multiple}
+								options={options}
+								getOptionLabel={(option) => option}
+								renderInput={(params) => (
+									<TextField
+										{...params}
+										label={name}
+										size='small'
+										error={!!errors.fields?.[index]?.value}
+										helperText={errors.fields?.[index]?.value?.message}
+									/>
+								)}
+								value={value || (multiple ? [] : null)}
+								onChange={(_, newValue) => {
+									onChange(newValue);
+									updateFieldValue(kuId, id, newValue);
+								}}
+								filterOptions={(options, { inputValue }) => {
+									const filtered = options.filter((option) =>
+										option.toLowerCase().includes(inputValue.toLowerCase())
+									);
+									return filtered;
+								}}
+								onMouseEnter={() => setHoveredField(id)}
+								onMouseLeave={() => setHoveredField(null)}
+							/>
+						)}
+					/>
+				);
+			} else {
+				// Regular dropdown for small lists
+				return (
+					<Controller
+						name={`fields.${index}.value`}
+						control={control}
+						defaultValue={multiple ? [] : ''}
+						rules={{ required: required ? `${name} is required` : false }}
+						render={({ field: renderField }) => (
+							<FormControl
+								fullWidth
+								size='small'
+								error={!!errors.fields?.[index]?.value}
+								onMouseEnter={() => setHoveredField(id)}
+								onMouseLeave={() => setHoveredField(null)}
+							>
+								<Select
+									{...renderField}
+									multiple={multiple}
+									displayEmpty
+									renderValue={(selected) => {
+										if (multiple) {
+											return (
+												<Box
+													sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}
+												>
+													{(selected as string[]).map((value) => (
+														<Chip key={value} label={value} size='small' />
+													))}
+												</Box>
+											);
+										}
+										return selected ? (
+											selected
+										) : (
+											<Typography color='text.secondary'>{name}</Typography>
+										);
+									}}
+									onChange={(e) => {
+										renderField.onChange(e);
+										updateFieldValue(kuId, id, e.target.value);
+									}}
+								>
+									{type.map((option) => (
+										<MenuItem key={option} value={option}>
+											{option}
+										</MenuItem>
+									))}
+								</Select>
+								{errors.fields?.[index]?.value && (
+									<FormHelperText>
+										{errors.fields?.[index]?.value?.message}
+									</FormHelperText>
+								)}
+							</FormControl>
+						)}
+					/>
 				);
 			}
-
-			// Determine highlight display state
-			const isActiveHighlight = activeHighlightFieldId === highlight.fieldId;
-			const isHoveredHighlight = hoveredFieldId === highlight.fieldId;
-			const highlightColor = getColorForField(highlight.fieldId);
-
-			// Style based on state (active/hovered/normal)
-			let backgroundColor = 'rgba(200, 200, 200, 0.3)'; // Default color
-			let opacity = 0.7;
-
-			if (isActiveHighlight) {
-				backgroundColor = highlightColor;
-				opacity = 0.8;
-			} else if (isHoveredHighlight) {
-				backgroundColor = highlightColor;
-				opacity = 0.5;
-			}
-
-			// Add the highlighted text
-			segments.push(
-				<span
-					key={`highlight-${highlight.id}`}
-					data-highlight-id={highlight.id}
-					style={{
-						backgroundColor,
-						opacity,
-						cursor: 'pointer',
-						padding: '2px 0',
-						borderRadius: '2px',
-						transition: 'all 0.2s ease',
-					}}
-					onClick={() => handleHighlightClick(highlight.id)}
-					onContextMenu={(e) => handleHighlightRightClick(e, highlight.id)}
-					onMouseEnter={() => setHoveredField(highlight.fieldId)}
-					onMouseLeave={() => setHoveredField(null)}
-				>
-					{content.substring(highlight.startOffset, highlight.endOffset)}
-				</span>
-			);
-
-			lastIndex = highlight.endOffset;
-		});
-
-		// Add remaining text
-		if (lastIndex < content.length) {
-			segments.push(
-				<span key='text-last'>{content.substring(lastIndex)}</span>
-			);
 		}
 
+		// Default fallback
 		return (
-			<pre
-				style={{
-					whiteSpace: 'pre-wrap',
-					wordWrap: 'break-word',
-					width: '100%',
-				}}
-			>
-				{segments}
-			</pre>
+			<Typography color='error'>
+				Unsupported field type: {JSON.stringify(type)}
+			</Typography>
 		);
 	};
 
-	// Create a debounced version of handleTextSelection
-	const debouncedHandleTextSelection = useCallback(
-		debounce(() => {
-			if (!activeHighlightFieldId || !selectedDocumentId) return;
-
-			const selection = window.getSelection();
-			if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
-				return;
-
-			const range = selection.getRangeAt(0);
-			const container = containerRef.current;
-			if (!container) return;
-
-			// Check if the selection overlaps with existing highlights
-			const highlightElements = container.querySelectorAll(
-				'[data-highlight-id]'
-			);
-			let overlapsHighlight = false;
-
-			// Convert range to DOM range for comparison
-			const selectionRect = range.getBoundingClientRect();
-
-			highlightElements.forEach((el) => {
-				const elRect = el.getBoundingClientRect();
-
-				// Check for overlap between selection and highlight
-				if (
-					!(
-						selectionRect.right < elRect.left ||
-						selectionRect.left > elRect.right ||
-						selectionRect.bottom < elRect.top ||
-						selectionRect.top > elRect.bottom
-					)
-				) {
-					overlapsHighlight = true;
-				}
-			});
-
-			if (overlapsHighlight) {
-				// Don't proceed with highlighting if overlapping
-				selection.removeAllRanges();
-				return;
-			}
-
-			// Find the active KU that contains the active field
-			const activeKU = knowledgeUnits.find(
-				(ku) =>
-					ku.documentId === selectedDocumentId &&
-					ku.fields.some((field) => field.id === activeHighlightFieldId)
-			);
-
-			if (!activeKU) return;
-
-			// Calculate text offsets
-			const startContainer = range.startContainer;
-			const startOffset = getTextOffset(
-				container,
-				startContainer,
-				range.startOffset
-			);
-			const endOffset = startOffset + range.toString().length;
-
-			// Add the highlight
-			addHighlight({
-				startOffset,
-				endOffset,
-				text: range.toString(),
-				fieldId: activeHighlightFieldId,
-				kuId: activeKU.id,
-			});
-
-			// Clear the selection
-			selection.removeAllRanges();
-		}, 300), // 300ms debounce time
-		[
-			activeHighlightFieldId,
-			selectedDocumentId,
-			knowledgeUnits,
-			getTextOffset,
-			addHighlight,
-		]
-	);
-
-	// Add useEffect to prevent double-click selection issues
-	useEffect(() => {
-		// Function to prevent text selection on double-click
-		const preventDoubleClickSelection = (event: MouseEvent) => {
-			// Check if we're in highlight mode and if the target is a highlight
-			if (
-				activeHighlightFieldId &&
-				(event.target as HTMLElement).hasAttribute('data-highlight-id')
-			) {
-				event.preventDefault();
-			}
-		};
-
-		// Add event listener for double-click
-		const container = containerRef.current;
-		if (container) {
-			container.addEventListener('dblclick', preventDoubleClickSelection);
+	const handleHighlightFieldClick = () => {
+		const highlightFieldId =
+			useAnnotationStore.getState().activeHighlightFieldId;
+		if (highlightFieldId === id) {
+			setActiveHighlightField(null);
+		} else {
+			setActiveHighlightField(id);
 		}
+	};
 
-		// Clean up
-		return () => {
-			if (container) {
-				container.removeEventListener('dblclick', preventDoubleClickSelection);
-			}
-		};
-	}, [activeHighlightFieldId, containerRef.current]);
+	// Function to clear all highlights for this field
+	const handleClearAllHighlights = () => {
+		const highlights = getFieldHighlights();
+		highlights.forEach((highlight) => {
+			removeHighlight(highlight.id);
+		});
+	};
 
 	return (
-		<Paper
-			elevation={0}
-			variant='outlined'
-			sx={{
-				height: '100%',
-				display: 'flex',
-				flexDirection: 'column',
-				overflow: 'hidden',
-			}}
+		<Box
+			sx={{ display: 'flex', alignItems: 'center', mb: 2 }}
+			onMouseEnter={() => setHoveredField(id)}
+			onMouseLeave={() => setHoveredField(null)}
 		>
-			<Box sx={{ p: 2, borderBottom: '1px solid #e0e0e0' }}>
-				<Typography variant='h6'>
-					{selectedDocument ? selectedDocument.title : 'Document View'}
-				</Typography>
-				{activeHighlightFieldId && (
-					<Typography variant='caption' color='primary'>
-						Highlight mode active - Select text to highlight
-					</Typography>
-				)}
-			</Box>
+			<Box sx={{ flexGrow: 1 }}>{renderFieldInput()}</Box>
 
-			<Box
-				ref={containerRef}
-				sx={{
-					flexGrow: 1,
-					overflow: 'auto',
-					p: 2,
-					fontFamily: 'monospace',
-					fontSize: '14px',
-					lineHeight: 1.5,
-					whiteSpace: 'pre-wrap',
-					cursor: activeHighlightFieldId ? 'cell' : 'text',
-					textAlign: 'left',
-				}}
-				onMouseUp={
-					activeHighlightFieldId ? debouncedHandleTextSelection : undefined
-				}
+			{/* Highlight button with badge showing count */}
+			<Badge
+				badgeContent={fieldHighlights.length}
+				color='primary'
+				invisible={!hasHighlights}
+				sx={{ mx: 1 }}
 			>
-				{!selectedDocument && (
-					<Typography color='text.secondary' align='center' sx={{ py: 4 }}>
-						Select a document from the list
-					</Typography>
-				)}
-
-				{selectedDocument && renderDocumentWithHighlights()}
-			</Box>
-
-			{/* Context Menu for Highlights with updated prop */}
-			<Menu
-				open={contextMenu !== null}
-				onClose={handleCloseContextMenu}
-				anchorReference='anchorPosition'
-				anchorPosition={
-					contextMenu !== null
-						? { top: contextMenu.mouseY, left: contextMenu.mouseX }
-						: undefined
-				}
-				// Add these properties to fix accessibility issues
-				disableRestoreFocus
-				disablePortal
-				keepMounted={false}
-			>
-				<MenuItem
-					onClick={handleRemoveHighlight}
-					// Add this to ensure focus is properly managed
-					dense
+				<IconButton
+					sx={{
+						// Updated styling - removed border when focused, only show border when active
+						borderColor: isActive ? getFieldColor() : 'transparent',
+						borderWidth: isActive ? 1 : 0,
+						borderStyle: 'solid',
+						// Handle icon color based on highlights
+						color: hasHighlights ? getFieldColor() : 'action.disabled',
+						// Remove focus outline/border
+						'&:focus': {
+							outline: 'none',
+						},
+						'&.Mui-focusVisible': {
+							outline: 'none',
+							border: 'none',
+						},
+					}}
+					onClick={handleHighlightFieldClick}
+					aria-label='Highlight evidence'
 				>
-					Remove Highlight
-				</MenuItem>
-			</Menu>
-		</Paper>
+					<HighlightIcon />
+				</IconButton>
+			</Badge>
+
+			{/* Clear all highlights button - only visible when highlights exist */}
+			{hasHighlights && (
+				<Tooltip title='Clear all highlights'>
+					<IconButton
+						size='small'
+						onClick={handleClearAllHighlights}
+						color='default'
+						sx={{ mr: 1 }}
+					>
+						<ClearIcon fontSize='small' />
+					</IconButton>
+				</Tooltip>
+			)}
+
+			{/* Delete field button for optional fields */}
+			{!required && (
+				<IconButton
+					color='error'
+					onClick={() => removeFieldFromKU(kuId, id)}
+					aria-label='Remove field'
+				>
+					<DeleteIcon />
+				</IconButton>
+			)}
+		</Box>
 	);
 };
 
-export default DocumentView;
+// Main KU Form component
+const KnowledgeUnitForm = ({
+	kuId,
+	schemaId,
+}: {
+	kuId: string;
+	schemaId: string;
+}) => {
+	const { knowledgeUnits, knowledgeUnitSchemas, setActiveHighlightField } =
+		useAnnotationStore(
+			useShallow((state) => ({
+				knowledgeUnits: state.knowledgeUnits,
+				knowledgeUnitSchemas: state.knowledgeUnitSchemas,
+				setActiveHighlightField: state.setActiveHighlightField,
+			}))
+		);
+
+	// Find the KU and its schema
+	const ku = knowledgeUnits.find((ku) => ku.id === kuId);
+	const schema = knowledgeUnitSchemas.find((s) => s.frameId === schemaId);
+
+	// Setup form
+	const {
+		control,
+		handleSubmit,
+		formState: { errors },
+	} = useForm<{ fields: { id: string; value: unknown }[] }>({
+		defaultValues: {
+			fields: ku?.fields,
+		},
+	});
+
+	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+	// If KU or schema not found, return error
+	if (!ku || !schema) {
+		return <Typography color='error'>Knowledge Unit not found</Typography>;
+	}
+
+	// Get optional fields not yet added
+	const availableOptionalFields = schema.fields.filter(
+		(schemaField) =>
+			!schemaField.required &&
+			!ku.fields.some((field) => field.id === schemaField.id)
+	);
+
+	// Handle adding an optional field
+	const handleAddField = (fieldId: string) => {
+		const addFieldToKU = useAnnotationStore.getState().addFieldToKU;
+		addFieldToKU(kuId, fieldId);
+		handleCloseMenu();
+	};
+
+	// Handle opening KU type menu
+	const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) =>
+		setAnchorEl(event.currentTarget);
+
+	// Handle closing KU type menu
+	const handleCloseMenu = () => setAnchorEl(null);
+
+	// Handle form submission
+	const onSubmit = (data: unknown) => {
+		console.log('Form submitted:', data);
+	};
+
+	return (
+		<Card variant='outlined' sx={{ mb: 3 }}>
+			<CardContent>
+				<Typography variant='h6' gutterBottom>
+					{schema.frameLabel}
+				</Typography>
+
+				<form onSubmit={handleSubmit(onSubmit)}>
+					{/* Render existing fields */}
+					{ku.fields.map((field, index) => (
+						<Box key={field.id} data-field-id={field.id}>
+							<FieldInput
+								field={field}
+								index={index}
+								// @ts-expect-error TODO: Fix type error
+								control={control}
+								errors={errors}
+								kuId={kuId}
+								setActiveHighlightField={setActiveHighlightField}
+							/>
+						</Box>
+					))}
+
+					{/* Add optional field button */}
+					{availableOptionalFields.length > 0 && (
+						<Box sx={{ mb: 2, display: 'flex' }}>
+							<Button
+								startIcon={<AddIcon />}
+								size='small'
+								onClick={(e) => handleOpenMenu(e)}
+								variant='outlined'
+							>
+								Add Field
+							</Button>
+
+							{/* Optional fields dropdown */}
+							<Menu
+								anchorEl={anchorEl}
+								open={Boolean(anchorEl)}
+								onClose={handleCloseMenu}
+							>
+								{availableOptionalFields.map((field) => (
+									<MenuItem
+										key={field.id}
+										onClick={() => handleAddField(field.id)}
+									>
+										{field.name}
+									</MenuItem>
+								))}
+							</Menu>
+						</Box>
+					)}
+				</form>
+			</CardContent>
+		</Card>
+	);
+};
+
+export default KnowledgeUnitForm;
