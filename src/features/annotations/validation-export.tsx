@@ -17,19 +17,21 @@ import {
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import { useShallow } from 'zustand/shallow';
-import useAnnotationStore from '@/store/use-annotation-store';
+import {
+	useDocumentAnnotationsQuery,
+	useDocumentQuery,
+	useExportAnnotationsMutation,
+} from '@/hooks/use-api';
 import { validateKnowledgeUnit } from '@/utils/validation';
+import useAnnotationStore from '@/store/use-annotation-store';
+import { useShallow } from 'zustand/shallow';
 
 const ValidationExport = ({ documentId }: { documentId: string | null }) => {
-	const { knowledgeUnits, knowledgeUnitSchemas, documents } =
-		useAnnotationStore(
-			useShallow((state) => ({
-				knowledgeUnits: state.knowledgeUnits,
-				knowledgeUnitSchemas: state.knowledgeUnitSchemas,
-				documents: state.documents,
-			}))
-		);
+	const { knowledgeUnitSchemas } = useAnnotationStore(
+		useShallow((state) => ({
+			knowledgeUnitSchemas: state.knowledgeUnitSchemas,
+		}))
+	);
 
 	// State for validation dialog
 	const [validationOpen, setValidationOpen] = useState(false);
@@ -41,20 +43,22 @@ const ValidationExport = ({ documentId }: { documentId: string | null }) => {
 		>;
 	}>({ isValid: true, errors: {} });
 	const [isValidating, setIsValidating] = useState(false);
-	const [isExporting, setIsExporting] = useState(false);
 
-	// Get knowledge units for the current document
-	const documentKUs = documentId
-		? knowledgeUnits.filter((ku) => ku.documentId === documentId)
-		: [];
+	// Fetch document and annotations
+	const { data: document } = useDocumentQuery(documentId);
+	const { data: annotations, isLoading: isLoadingAnnotations } =
+		useDocumentAnnotationsQuery(documentId);
 
-	// Find document name
-	const document = documents.find((doc) => doc.id === documentId);
+	// Export mutation
+	const exportMutation = useExportAnnotationsMutation();
+
+	// Document name for export
 	const documentName = document ? document.title : 'Unknown Document';
 
 	// Validate all KUs in the document
 	const validateDocument = () => {
 		setIsValidating(true);
+		setValidationOpen(true);
 
 		// Validation results
 		const errors: Record<
@@ -67,29 +71,32 @@ const ValidationExport = ({ documentId }: { documentId: string | null }) => {
 		> = {};
 
 		// Run validation for each KU
-		documentKUs.forEach((ku) => {
-			const schema = knowledgeUnitSchemas.find(
-				(s) => s.frameId === ku.schemaId
-			);
-			if (!schema) {
-				errors[ku.id] = {
-					kuId: ku.id,
-					kuType: 'Unknown',
-					fieldErrors: { _schema: ['Schema not found'] },
-				};
-				return;
-			}
+		if (annotations) {
+			annotations.forEach((ku) => {
+				const schema = knowledgeUnitSchemas.find(
+					(s) => s.frameId === ku.schemaId
+				);
 
-			const validation = validateKnowledgeUnit(ku, schema);
+				if (!schema) {
+					errors[ku.id] = {
+						kuId: ku.id,
+						kuType: 'Unknown',
+						fieldErrors: { _schema: ['Schema not found'] },
+					};
+					return;
+				}
 
-			if (!validation.isValid) {
-				errors[ku.id] = {
-					kuId: ku.id,
-					kuType: schema.frameLabel,
-					fieldErrors: validation.errors,
-				};
-			}
-		});
+				const validation = validateKnowledgeUnit(ku, schema);
+
+				if (!validation.isValid) {
+					errors[ku.id] = {
+						kuId: ku.id,
+						kuType: schema.frameLabel,
+						fieldErrors: validation.errors,
+					};
+				}
+			});
+		}
 
 		// Set validation results
 		setValidationResults({
@@ -98,49 +105,32 @@ const ValidationExport = ({ documentId }: { documentId: string | null }) => {
 		});
 
 		setIsValidating(false);
-		setValidationOpen(true);
 	};
 
 	// Export annotations after validation
 	const handleExport = () => {
-		setIsExporting(true);
+		if (!documentId) return;
 
-		try {
-			const exportData = useAnnotationStore.getState().exportAnnotations();
+		exportMutation.mutate(documentId, {
+			onSuccess: (data) => {
+				// Create a JSON file for download
+				const dataStr = JSON.stringify(data, null, 2);
+				const dataUri =
+					'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
 
-			// Filter for just this document if documentId is provided
-			const documentData = documentId
-				? {
-						document: documents.find((d) => d.id === documentId),
-						knowledgeUnits: documentKUs,
-				  }
-				: exportData;
+				const exportFileDefaultName = `annotations_${documentName.replace(
+					/\s+/g,
+					'_'
+				)}.json`;
 
-			// In a real application, you would send this to a server
-			// For now, we'll simulate an export
-			console.log('Exported data:', documentData);
+				const linkElement = document.createElement('a');
+				linkElement.setAttribute('href', dataUri);
+				linkElement.setAttribute('download', exportFileDefaultName);
+				linkElement.click();
 
-			// Create a JSON file for download
-			const dataStr = JSON.stringify(documentData, null, 2);
-			const dataUri =
-				'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-
-			const exportFileDefaultName = `annotations_${documentName.replace(
-				/\s+/g,
-				'_'
-			)}.json`;
-
-			const linkElement = document.createElement('a');
-			linkElement.setAttribute('href', dataUri);
-			linkElement.setAttribute('download', exportFileDefaultName);
-			linkElement.click();
-
-			setIsExporting(false);
-			setValidationOpen(false);
-		} catch (error) {
-			console.error('Export error:', error);
-			setIsExporting(false);
-		}
+				setValidationOpen(false);
+			},
+		});
 	};
 
 	// Close the validation dialog
@@ -155,7 +145,11 @@ const ValidationExport = ({ documentId }: { documentId: string | null }) => {
 				variant='contained'
 				fullWidth
 				startIcon={<CloudUploadIcon />}
-				disabled={!documentId || documentKUs.length === 0}
+				disabled={
+					!documentId ||
+					isLoadingAnnotations ||
+					(annotations && annotations.length === 0)
+				}
 				onClick={validateDocument}
 				sx={{ mt: 2 }}
 			>
@@ -247,16 +241,16 @@ const ValidationExport = ({ documentId }: { documentId: string | null }) => {
 							onClick={handleExport}
 							variant='contained'
 							color='primary'
-							disabled={isExporting}
+							disabled={exportMutation.isPending}
 							startIcon={
-								isExporting ? (
+								exportMutation.isPending ? (
 									<CircularProgress size={24} />
 								) : (
 									<CloudUploadIcon />
 								)
 							}
 						>
-							{isExporting ? 'Exporting...' : 'Export Annotations'}
+							{exportMutation.isPending ? 'Exporting...' : 'Export Annotations'}
 						</Button>
 					)}
 				</DialogActions>

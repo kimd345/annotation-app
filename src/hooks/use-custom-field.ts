@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useShallow } from 'zustand/shallow';
 import useAnnotationStore from '@/store/use-annotation-store';
 import { CustomFieldType } from '@/types';
+import { useDocumentAnnotationsQuery, useKnowledgeUnitMutation } from '@/hooks/use-api';
 
 // Define types for the form data
 export interface CustomFieldFormData {
@@ -13,24 +14,27 @@ export const useCustomField = () => {
   const {
     isCustomFieldModalOpen,
     activeCustomField,
-    customFieldTypes,
     closeCustomFieldModal,
-    updateFieldValue,
-    knowledgeUnits,
-    knowledgeUnitSchemas,
   } = useAnnotationStore(
     useShallow((state) => ({
       isCustomFieldModalOpen: state.isCustomFieldModalOpen,
       activeCustomField: state.activeCustomField,
-      customFieldTypes: state.customFieldTypes,
       closeCustomFieldModal: state.closeCustomFieldModal,
-      updateFieldValue: state.updateFieldValue,
-      knowledgeUnits: state.knowledgeUnits,
-      knowledgeUnitSchemas: state.knowledgeUnitSchemas,
     }))
   );
 
-  // Use the correct type for currentFields based on CustomFieldType
+  // Use the mutation for updating KUs
+  const kuMutation = useKnowledgeUnitMutation();
+  
+  // Fetch the current KU's annotations to update them later
+  const { data: annotations } = useDocumentAnnotationsQuery(
+    activeCustomField ? 
+      annotations => annotations.find(ku => ku.id === activeCustomField.kuId)?.documentId || null
+      : null
+  );
+
+  // Track the custom field type and fields
+  const [customFieldType, setCustomFieldType] = useState<CustomFieldType | null>(null);
   const [currentFields, setCurrentFields] = useState<CustomFieldType['fields']>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -42,17 +46,10 @@ export const useCustomField = () => {
 
   const { handleSubmit, reset, setValue } = methods;
 
-  // Find the current custom field type
-  const customFieldType = activeCustomField?.fieldType
-    ? customFieldTypes.find(
-        (type) => type.typeId === activeCustomField.fieldType
-      )
-    : null;
-
   // Find the current field value if exists
   useEffect(() => {
-    if (activeCustomField?.kuId && activeCustomField?.fieldId) {
-      const ku = knowledgeUnits.find((ku) => ku.id === activeCustomField.kuId);
+    if (activeCustomField?.kuId && activeCustomField?.fieldId && annotations) {
+      const ku = annotations.find((ku) => ku.id === activeCustomField.kuId);
       if (ku) {
         const field = ku.fields.find((f) => f.id === activeCustomField.fieldId);
         if (field && field.value) {
@@ -64,7 +61,7 @@ export const useCustomField = () => {
         }
       }
     }
-  }, [activeCustomField, knowledgeUnits, setValue]);
+  }, [activeCustomField, annotations, setValue]);
 
   // When custom field type changes, update the fields
   useEffect(() => {
@@ -77,7 +74,7 @@ export const useCustomField = () => {
 
   // Handle form submission with proper typing and validation
   const onSubmit = (data: CustomFieldFormData) => {
-    if (!activeCustomField) return;
+    if (!activeCustomField || !annotations) return;
 
     // Validate that at least one field has a value
     const hasValue = Object.values(data).some(
@@ -94,40 +91,61 @@ export const useCustomField = () => {
     // Since isNewField is optional in ActiveCustomField type, use a default of false
     const isNewField = activeCustomField.isNewField ?? false;
 
-    if (isNewField) {
-      // If this is a new field, we need to add it to the KU
-      const ku = knowledgeUnits.find((ku) => ku.id === kuId);
-      if (!ku) return;
-
-      const schema = knowledgeUnitSchemas.find(
-        (s) => s.frameId === ku.schemaId
-      );
-      if (!schema) return;
-
-      const fieldSchema = schema.fields.find((f) => f.id === fieldId);
-      if (!fieldSchema) return;
-
-      // Add the field with the custom value
-      const updatedKnowledgeUnits = knowledgeUnits.map((ku) =>
-        ku.id === kuId
-          ? {
-              ...ku,
-              fields: [
-                ...ku.fields,
-                { ...fieldSchema, highlights: [], value: data },
-              ],
-            }
-          : ku
-      );
-
-      // Update the store
-      useAnnotationStore.setState({ knowledgeUnits: updatedKnowledgeUnits });
-    } else {
-      // For existing fields, just update the value
-      updateFieldValue(kuId, fieldId, data);
+    // Find the current KU
+    const ku = annotations.find(ku => ku.id === kuId);
+    if (!ku) {
+      console.error('Knowledge unit not found');
+      return;
     }
 
-    closeCustomFieldModal();
+    let updatedKU = { ...ku };
+
+    if (isNewField) {
+      // Get the field schema from the KU schema
+      const schemaFields = useAnnotationStore.getState().knowledgeUnitSchemas
+        .find(s => s.frameId === ku.schemaId)?.fields;
+      
+      if (!schemaFields) {
+        console.error('Schema not found');
+        return;
+      }
+
+      const fieldSchema = schemaFields.find(f => f.id === fieldId);
+      if (!fieldSchema) {
+        console.error('Field schema not found');
+        return;
+      }
+
+      // Add the new field to the KU
+      updatedKU = {
+        ...ku,
+        fields: [
+          ...ku.fields,
+          {
+            ...fieldSchema,
+            value: data,
+            highlights: [],
+          }
+        ]
+      };
+    } else {
+      // Update the existing field
+      updatedKU = {
+        ...ku,
+        fields: ku.fields.map(field => 
+          field.id === fieldId 
+            ? { ...field, value: data } 
+            : field
+        )
+      };
+    }
+
+    // Save the updated KU to the API
+    kuMutation.mutate(updatedKU, {
+      onSuccess: () => {
+        closeCustomFieldModal();
+      }
+    });
   };
 
   // Handle cancel
@@ -142,9 +160,11 @@ export const useCustomField = () => {
     currentFields,
     validationError,
     customFieldType,
+    activeCustomField,
     isCustomFieldModalOpen,
+    setCustomFieldType,
     handleSubmit,
     onSubmit,
     handleCancel,
   };
-};
+}

@@ -1,10 +1,9 @@
-import { useEffect } from 'react';
+// src/App.tsx
 import { Box, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import DocumentView from './features/documents/document-view';
 import ListView from './features/documents/list-view';
 import AnnotationView from './features/annotations/annotation-view';
 import CustomFieldModal from './features/annotations/custom-field-modal';
-import { initializeStore } from './lib/mock-data';
 
 // Create a theme instance
 const theme = createTheme({
@@ -19,11 +18,6 @@ const theme = createTheme({
 });
 
 function App() {
-	// Initialize store
-	useEffect(() => {
-		initializeStore();
-	}, []);
-
 	return (
 		<ThemeProvider theme={theme}>
 			<CssBaseline />
@@ -41,7 +35,6 @@ function App() {
 				</Box>
 
 				{/* Main content - Document viewer */}
-				{/* TODO: Fix width */}
 				<Box
 					sx={{
 						flex: 1,

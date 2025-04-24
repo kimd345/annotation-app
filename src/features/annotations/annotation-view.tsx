@@ -1,5 +1,4 @@
-// src/features/annotations/annotation-pane.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
 	Box,
 	Typography,
@@ -8,29 +7,52 @@ import {
 	MenuItem,
 	Paper,
 	Divider,
+	CircularProgress,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import useAnnotationStore from '@/store/use-annotation-store';
 import KnowledgeUnitForm from './ku-form';
 import ValidationExport from './validation-export';
 import { useShallow } from 'zustand/shallow';
+import {
+	useSchemasQuery,
+	useDocumentAnnotationsQuery,
+	useKnowledgeUnitMutation,
+} from '@/hooks/use-api';
 
 const AnnotationView = () => {
 	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
+	const { selectedDocumentId, setKnowledgeUnitSchemas, addKnowledgeUnit } =
+		useAnnotationStore(
+			useShallow((state) => ({
+				selectedDocumentId: state.selectedDocumentId,
+				setKnowledgeUnitSchemas: state.setKnowledgeUnitSchemas,
+				addKnowledgeUnit: state.addKnowledgeUnit,
+			}))
+		);
+
+	// Fetch schemas and annotations
 	const {
-		selectedDocumentId,
-		knowledgeUnitSchemas,
-		knowledgeUnits,
-		addKnowledgeUnit,
-	} = useAnnotationStore(
-		useShallow((state) => ({
-			selectedDocumentId: state.selectedDocumentId,
-			knowledgeUnitSchemas: state.knowledgeUnitSchemas,
-			knowledgeUnits: state.knowledgeUnits,
-			addKnowledgeUnit: state.addKnowledgeUnit,
-		}))
-	);
+		data: schemas,
+		isLoading: isLoadingSchemas,
+		isError: isErrorSchemas,
+	} = useSchemasQuery();
+	const {
+		data: annotations,
+		isLoading: isLoadingAnnotations,
+		isError: isErrorAnnotations,
+	} = useDocumentAnnotationsQuery(selectedDocumentId);
+
+	// Mutation for adding new KUs
+	const addKUMutation = useKnowledgeUnitMutation();
+
+	// Update the store with the schemas when they change
+	useEffect(() => {
+		if (schemas) {
+			setKnowledgeUnitSchemas(schemas);
+		}
+	}, [schemas, setKnowledgeUnitSchemas]);
 
 	// Handle opening KU type menu
 	const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -44,14 +66,18 @@ const AnnotationView = () => {
 
 	// Handle adding a new KU
 	const handleAddKU = (schemaId: string) => {
-		addKnowledgeUnit(schemaId);
+		// Create the new KU locally
+		const newKU = addKnowledgeUnit(schemaId);
+		if (newKU) {
+			// Save it to the API
+			addKUMutation.mutate(newKU);
+		}
 		handleCloseMenu();
 	};
 
-	// Get KUs for the selected document
-	const documentKUs = knowledgeUnits.filter(
-		(ku) => ku.documentId === selectedDocumentId
-	);
+	// Loading and error states
+	const isLoading = isLoadingSchemas || isLoadingAnnotations;
+	const isError = isErrorSchemas || isErrorAnnotations;
 
 	return (
 		<Paper
@@ -71,21 +97,25 @@ const AnnotationView = () => {
 			</Box>
 
 			<Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-				{!selectedDocumentId && (
+				{isLoading ? (
+					<Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+						<CircularProgress />
+					</Box>
+				) : isError ? (
+					<Typography color='error' align='center' sx={{ py: 4 }}>
+						Error loading data. Please try again.
+					</Typography>
+				) : !selectedDocumentId ? (
 					<Typography color='text.secondary' align='center' sx={{ py: 4 }}>
 						Select a document to add annotations
 					</Typography>
-				)}
-
-				{selectedDocumentId && documentKUs.length === 0 && (
+				) : annotations && annotations.length === 0 ? (
 					<Typography color='text.secondary' align='center' sx={{ py: 4 }}>
 						No knowledge units added yet
 					</Typography>
-				)}
-
-				{selectedDocumentId && documentKUs.length > 0 && (
+				) : annotations && annotations.length > 0 ? (
 					<Box>
-						{documentKUs.map((ku) => (
+						{annotations.map((ku) => (
 							<KnowledgeUnitForm
 								key={ku.id}
 								kuId={ku.id}
@@ -93,7 +123,7 @@ const AnnotationView = () => {
 							/>
 						))}
 					</Box>
-				)}
+				) : null}
 			</Box>
 
 			<Box sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
@@ -102,7 +132,7 @@ const AnnotationView = () => {
 					startIcon={<AddIcon />}
 					fullWidth
 					onClick={handleOpenMenu}
-					disabled={!selectedDocumentId}
+					disabled={!selectedDocumentId || !schemas}
 				>
 					Add Knowledge Unit
 				</Button>
@@ -119,15 +149,16 @@ const AnnotationView = () => {
 						horizontal: 'left',
 					}}
 				>
-					{knowledgeUnitSchemas.map((schema) => (
-						<MenuItem
-							key={schema.frameId}
-							onClick={() => handleAddKU(schema.frameId)}
-							sx={{ width: 285 }}
-						>
-							{schema.frameLabel}
-						</MenuItem>
-					))}
+					{schemas &&
+						schemas.map((schema) => (
+							<MenuItem
+								key={schema.frameId}
+								onClick={() => handleAddKU(schema.frameId)}
+								sx={{ width: 285 }}
+							>
+								{schema.frameLabel}
+							</MenuItem>
+						))}
 				</Menu>
 
 				<Divider sx={{ my: 2 }} />

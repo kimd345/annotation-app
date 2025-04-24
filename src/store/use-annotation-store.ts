@@ -1,18 +1,19 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
+import { AnnotationStore, ActiveCustomField, Highlight } from '../types';
 
-import { KnowledgeUnit, AnnotationStore, ActiveCustomField } from '../types';
-import { customFieldTypes } from '../lib/mock-data';
+// Note: We're keeping this store for UI state management,
+// but data fetching is now handled by Tanstack Query
 
 const useAnnotationStore = create<AnnotationStore>((set, get) => ({
-	// Initial state
+	// Initial state - most data now comes from API
 	documents: [],
 	knowledgeUnitSchemas: [],
 	knowledgeUnits: [],
 	selectedDocumentId: null,
 	activeHighlightFieldId: null,
 	hoveredFieldId: null,
-	customFieldTypes: customFieldTypes, // Initialize with the custom field types
+	customFieldTypes: [],
 	isCustomFieldModalOpen: false,
 	activeCustomField: null,
 
@@ -22,6 +23,8 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 	},
 
 	addKnowledgeUnit: (schemaId) => {
+		// This remains as a placeholder, but the actual data saving happens
+		// through the Tanstack Query mutation
 		const { selectedDocumentId, knowledgeUnitSchemas } = get();
 
 		if (!selectedDocumentId) return;
@@ -29,8 +32,8 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		const schema = knowledgeUnitSchemas.find((s) => s.frameId === schemaId);
 		if (!schema) return;
 
-		// Create a new KU with required fields only
-		const newKU: KnowledgeUnit = {
+		// Create a new KU with required fields only and return it
+		return {
 			id: uuidv4(),
 			schemaId,
 			documentId: selectedDocumentId,
@@ -43,16 +46,10 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 					value: f.multiple ? [] : '',
 				})),
 		};
-
-		set((state) => ({
-			knowledgeUnits: [...state.knowledgeUnits, newKU],
-			// Mark document as having annotations
-			documents: state.documents.map((doc) =>
-				doc.id === selectedDocumentId ? { ...doc, hasAnnotations: true } : doc
-			),
-		}));
 	},
 
+	// This will only update the local state temporarily
+	// Actual updates are handled through mutations
 	updateFieldValue: (kuId, fieldId, value) => {
 		set((state) => ({
 			knowledgeUnits: state.knowledgeUnits.map((ku) =>
@@ -68,7 +65,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		}));
 	},
 
-	// Modified version of addFieldToKU function
+	// Same with adding fields - local state only
 	addFieldToKU: (kuId, fieldId) => {
 		const { knowledgeUnits, knowledgeUnitSchemas } = get();
 
@@ -89,7 +86,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 			// Open the modal instead of adding the field immediately
 			const openCustomFieldModal = get().openCustomFieldModal;
 			// @ts-expect-error
-			openCustomFieldModal(kuId, fieldId, fieldSchema.type, true); // Pass 'true' to indicate this is a new field
+			openCustomFieldModal(kuId, fieldId, fieldSchema.type, true);
 			return;
 		}
 
@@ -128,13 +125,12 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 	},
 
 	// Custom field modal actions
-	// Updated openCustomFieldModal function
 	openCustomFieldModal: (kuId, fieldId, fieldType, isNewField = false) => {
 		const activeCustomField: ActiveCustomField = {
 			kuId,
 			fieldId,
 			fieldType,
-			isNewField, // Add this flag to track if this is a new field
+			isNewField,
 		};
 		set({
 			isCustomFieldModalOpen: true,
@@ -187,7 +183,9 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		const { knowledgeUnits } = get();
 		for (const ku of knowledgeUnits) {
 			for (const field of ku.fields) {
-				const highlight = field.highlights.find((h) => h.id === highlightId);
+				const highlight = field.highlights.find((h) => h.id === highlightId) as
+					| Highlight
+					| undefined;
 				if (highlight) {
 					return { kuId: ku.id, fieldId: field.id, highlight };
 				}
@@ -196,35 +194,33 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		return null;
 	},
 
-	exportAnnotations: (): any => {
+	// In real implementation, this would now call the API
+	exportAnnotations: () => {
 		const { knowledgeUnits, documents } = get();
 
-		// Format the data as needed for export
-		// This is a simplified version
-		const exportData = documents.map((doc) => {
-			const docKUs = knowledgeUnits.filter((ku) => ku.documentId === doc.id);
+		// This function is no longer needed as we'll use the API directly
+		// Keeping it for backward compatibility
+		return {
+			documents,
+			knowledgeUnits,
+		};
+	},
 
-			return {
-				documentId: doc.id,
-				title: doc.title,
-				knowledgeUnits: docKUs.map((ku) => ({
-					kuId: ku.id,
-					schemaId: ku.schemaId,
-					fields: ku.fields.map((field) => ({
-						fieldId: field.id,
-						name: field.name,
-						value: field.value,
-						highlights: field.highlights.map((h) => ({
-							text: h.text,
-							startOffset: h.startOffset,
-							endOffset: h.endOffset,
-						})),
-					})),
-				})),
-			};
-		});
+	// New utility methods to update store from API responses
+	setDocuments: (documents) => {
+		set({ documents });
+	},
 
-		return exportData;
+	setKnowledgeUnitSchemas: (schemas) => {
+		set({ knowledgeUnitSchemas: schemas });
+	},
+
+	setKnowledgeUnits: (units) => {
+		set({ knowledgeUnits: units });
+	},
+
+	setCustomFieldTypes: (types) => {
+		set({ customFieldTypes: types });
 	},
 }));
 

@@ -2,11 +2,12 @@
 import React, { useEffect } from 'react';
 import { FormProvider } from 'react-hook-form';
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Divider,
+	Box,
+	Card,
+	CardContent,
+	Typography,
+	Divider,
+	CircularProgress,
 } from '@mui/material';
 import { useShallow } from 'zustand/shallow';
 import useAnnotationStore from '@/store/use-annotation-store';
@@ -15,203 +16,228 @@ import FieldInput from './field-input';
 import ValidationSummary from '@/components/forms/ValidationSummary';
 import OptionalFieldsMenu from '@/components/forms/OptionalFieldsMenu';
 import FormActions from '@/components/forms/FormActions';
+import {
+	useDocumentAnnotationsQuery,
+	useKnowledgeUnitMutation,
+} from '@/hooks/use-api';
 
 // Main KU Form component
 const KnowledgeUnitForm = ({
-  kuId,
-  schemaId,
+	kuId,
+	schemaId,
 }: {
-  kuId: string;
-  schemaId: string;
+	kuId: string;
+	schemaId: string;
 }) => {
-  const {
-    knowledgeUnits,
-    knowledgeUnitSchemas,
-    setActiveHighlightField,
-    updateFieldValue,
-  } = useAnnotationStore(
-    useShallow((state) => ({
-      knowledgeUnits: state.knowledgeUnits,
-      knowledgeUnitSchemas: state.knowledgeUnitSchemas,
-      setActiveHighlightField: state.setActiveHighlightField,
-      updateFieldValue: state.updateFieldValue,
-    }))
-  );
+	const { knowledgeUnitSchemas, setActiveHighlightField } = useAnnotationStore(
+		useShallow((state) => ({
+			knowledgeUnitSchemas: state.knowledgeUnitSchemas,
+			setActiveHighlightField: state.setActiveHighlightField,
+		}))
+	);
 
-  // Find the KU and its schema
-  const ku = knowledgeUnits.find((ku) => ku.id === kuId);
-  const schema = knowledgeUnitSchemas.find((s) => s.frameId === schemaId);
+	// Fetch the current KU's data from the API
+	const { data: annotations, isLoading: isLoadingAnnotations } =
+		useDocumentAnnotationsQuery(
+			(annotations) =>
+				annotations.find((ku) => ku.id === kuId)?.documentId || null
+		);
 
-  // Setup form with validation
-  const [methods, validationState] = useFormValidation<FormData>({
-    fields:
-      ku?.fields.map((field) => ({
-        id: field.id,
-        value: field.value || '',
-        highlights: field.highlights || [],
-      })) || [],
-  });
+	// Get the mutation for updating KUs
+	const kuMutation = useKnowledgeUnitMutation();
 
-  const {
-    handleSubmit,
-    formState: { errors, isSubmitting, isSubmitSuccessful },
-    reset,
-    getValues,
-  } = methods;
+	// Find the KU and its schema
+	const ku = annotations?.find((ku) => ku.id === kuId);
+	const schema = knowledgeUnitSchemas.find((s) => s.frameId === schemaId);
 
-  const { showValidationSummary, setShowValidationSummary, validateForm } = validationState;
+	// Setup form with validation
+	const [methods, validationState] = useFormValidation<FormData>({
+		fields:
+			ku?.fields.map((field) => ({
+				id: field.id,
+				value: field.value || '',
+				highlights: field.highlights || [],
+			})) || [],
+	});
 
-  // Re-initialize form when KU changes
-  useEffect(() => {
-    if (ku) {
-      reset({
-        fields: ku.fields.map((field) => {
-          // Handle initialization for multiple select fields
-          if (field.multiple && field.value === undefined) {
-            return {
-              id: field.id,
-              value: [],
-              highlights: field.highlights || [],
-            };
-          }
+	const {
+		handleSubmit,
+		formState: { errors, isSubmitting, isSubmitSuccessful },
+		reset,
+		getValues,
+	} = methods;
 
-          return {
-            id: field.id,
-            value: field.value ?? '',
-            highlights: field.highlights || [],
-          };
-        }),
-      });
-    }
-  }, [ku?.id, reset, ku]);
+	const { showValidationSummary, setShowValidationSummary, validateForm } =
+		validationState;
 
-  // If KU or schema not found, return error
-  if (!ku || !schema) {
-    return <Typography color="error">Knowledge Unit not found</Typography>;
-  }
+	// Re-initialize form when KU changes
+	useEffect(() => {
+		if (ku) {
+			reset({
+				fields: ku.fields.map((field) => {
+					// Handle initialization for multiple select fields
+					if (field.multiple && field.value === undefined) {
+						return {
+							id: field.id,
+							value: [],
+							highlights: field.highlights || [],
+						};
+					}
 
-  // Custom validation function for highlights
-  const validateHighlights = (
-    highlights: Array<{ id: string }>,
-    fieldId: string,
-    required: boolean
-  ): boolean | string => {
-    try {
-      // Get the field index safely
-      const fieldIndex = ku.fields.findIndex((f) => f.id === fieldId);
-      if (fieldIndex === -1) return true; // Field not found, skip validation
+					return {
+						id: field.id,
+						value: field.value ?? '',
+						highlights: field.highlights || [],
+					};
+				}),
+			});
+		}
+	}, [ku?.id, reset, ku]);
 
-      // Get field value safely
-      const fieldValue = getValues(`fields.${fieldIndex}.value`);
+	// If KU or schema not found, show loading or error
+	if (isLoadingAnnotations) {
+		return (
+			<Card variant='outlined' sx={{ mb: 3, p: 4, textAlign: 'center' }}>
+				<CircularProgress size={24} />
+			</Card>
+		);
+	}
 
-      // Check if value is empty
-      const isEmpty =
-        fieldValue === '' ||
-        fieldValue === null ||
-        fieldValue === undefined ||
-        (Array.isArray(fieldValue) && fieldValue.length === 0);
+	if (!ku || !schema) {
+		return <Typography color='error'>Knowledge Unit not found</Typography>;
+	}
 
-      // Skip validation for optional fields with no value
-      if (!required && isEmpty) {
-        return true;
-      }
+	// Custom validation function for highlights
+	const validateHighlights = (
+		highlights: Array<{ id: string }>,
+		fieldId: string,
+		required: boolean
+	): boolean | string => {
+		try {
+			// Get the field index safely
+			const fieldIndex = ku.fields.findIndex((f) => f.id === fieldId);
+			if (fieldIndex === -1) return true; // Field not found, skip validation
 
-      // All fields with values should have highlights
-      return (
-        (highlights && highlights.length > 0) ||
-        'Evidence highlighting required'
-      );
-    } catch (error) {
-      console.error('Highlight validation error:', error);
-      return true; // Skip validation on error to prevent crashes
-    }
-  };
+			// Get field value safely
+			const fieldValue = getValues(`fields.${fieldIndex}.value`);
 
-  // Get optional fields not yet added
-  const availableOptionalFields = schema.fields.filter(
-    (schemaField) =>
-      !schemaField.required &&
-      !ku.fields.some((field) => field.id === schemaField.id)
-  );
+			// Check if value is empty
+			const isEmpty =
+				fieldValue === '' ||
+				fieldValue === null ||
+				fieldValue === undefined ||
+				(Array.isArray(fieldValue) && fieldValue.length === 0);
 
-  // Handle form submission with validation
-  const onSubmit = (data: FormData) => {
-    console.log('Form submitted successfully:', data);
+			// Skip validation for optional fields with no value
+			if (!required && isEmpty) {
+				return true;
+			}
 
-    // Update all field values in the store
-    data.fields.forEach((field, index) => {
-      const kuField = ku.fields[index];
-      if (kuField) {
-        updateFieldValue(kuId, kuField.id, field.value);
-      }
-    });
+			// All fields with values should have highlights
+			return (
+				(highlights && highlights.length > 0) ||
+				'Evidence highlighting required'
+			);
+		} catch (error) {
+			console.error('Highlight validation error:', error);
+			return true; // Skip validation on error to prevent crashes
+		}
+	};
 
-    // Hide validation summary on success
-    setShowValidationSummary(false);
-  };
+	// Get optional fields not yet added
+	const availableOptionalFields = schema.fields.filter(
+		(schemaField) =>
+			!schemaField.required &&
+			!ku.fields.some((field) => field.id === schemaField.id)
+	);
 
-  const onError = () => {
-    console.error('Form validation errors:', errors);
-    setShowValidationSummary(true);
-  };
+	// Handle form submission with validation
+	const onSubmit = (data: FormData) => {
+		console.log('Form submitted successfully:', data);
 
-  return (
-    <FormProvider {...methods}>
-      <Card variant="outlined" sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            {schema.frameLabel}
-          </Typography>
+		// Prepare updated KU data
+		const updatedKU = { ...ku };
 
-          <form onSubmit={handleSubmit(onSubmit, onError)} noValidate>
-            {/* Validation Summary Component */}
-            <ValidationSummary 
-              showValidationSummary={showValidationSummary}
-              errors={errors}
-              fields={ku.fields}
-              schemaFields={schema.fields}
-            />
+		// Update field values
+		data.fields.forEach((field, index) => {
+			const kuField = updatedKU.fields[index];
+			if (kuField) {
+				updatedKU.fields[index] = {
+					...kuField,
+					value: field.value,
+				};
+			}
+		});
 
-            {/* Render existing fields */}
-            {ku.fields.map((field, index) => {
-              // Find schema field to get validation rules
-              const schemaField = schema.fields.find((f) => f.id === field.id);
+		// Submit the updated KU to the API
+		kuMutation.mutate(updatedKU);
 
-              return (
-                <Box key={field.id} data-field-id={field.id}>
-                  <FieldInput
-                    field={field}
-                    index={index}
-                    control={methods.control}
-                    errors={errors}
-                    kuId={kuId}
-                    setActiveHighlightField={setActiveHighlightField}
-                    validateHighlights={validateHighlights}
-                    required={schemaField?.required || false}
-                  />
-                </Box>
-              );
-            })}
+		// Hide validation summary on success
+		setShowValidationSummary(false);
+	};
 
-            {/* Optional Fields Menu Component */}
-            <OptionalFieldsMenu 
-              availableOptionalFields={availableOptionalFields}
-              kuId={kuId}
-            />
+	const onError = () => {
+		console.error('Form validation errors:', errors);
+		setShowValidationSummary(true);
+	};
 
-            <Divider sx={{ my: 2 }} />
+	return (
+		<FormProvider {...methods}>
+			<Card variant='outlined' sx={{ mb: 3 }}>
+				<CardContent>
+					<Typography variant='h6' gutterBottom>
+						{schema.frameLabel}
+					</Typography>
 
-            {/* Form Actions Component */}
-            <FormActions 
-              onValidate={validateForm}
-              isSubmitting={isSubmitting}
-              isSubmitSuccessful={isSubmitSuccessful}
-            />
-          </form>
-        </CardContent>
-      </Card>
-    </FormProvider>
-  );
+					<form onSubmit={handleSubmit(onSubmit, onError)} noValidate>
+						{/* Validation Summary Component */}
+						<ValidationSummary
+							showValidationSummary={showValidationSummary}
+							errors={errors}
+							fields={ku.fields}
+							schemaFields={schema.fields}
+						/>
+
+						{/* Render existing fields */}
+						{ku.fields.map((field, index) => {
+							// Find schema field to get validation rules
+							const schemaField = schema.fields.find((f) => f.id === field.id);
+
+							return (
+								<Box key={field.id} data-field-id={field.id}>
+									<FieldInput
+										field={field}
+										index={index}
+										control={methods.control}
+										errors={errors}
+										kuId={kuId}
+										setActiveHighlightField={setActiveHighlightField}
+										validateHighlights={validateHighlights}
+										required={schemaField?.required || false}
+									/>
+								</Box>
+							);
+						})}
+
+						{/* Optional Fields Menu Component */}
+						<OptionalFieldsMenu
+							availableOptionalFields={availableOptionalFields}
+							kuId={kuId}
+						/>
+
+						<Divider sx={{ my: 2 }} />
+
+						{/* Form Actions Component */}
+						<FormActions
+							onValidate={validateForm}
+							isSubmitting={isSubmitting || kuMutation.isPending}
+							isSubmitSuccessful={isSubmitSuccessful}
+						/>
+					</form>
+				</CardContent>
+			</Card>
+		</FormProvider>
+	);
 };
 
 export default KnowledgeUnitForm;
