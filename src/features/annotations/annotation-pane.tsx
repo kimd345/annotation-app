@@ -113,11 +113,20 @@ const AnnotationPanel = () => {
 					anchorEl={anchorEl}
 					open={Boolean(anchorEl)}
 					onClose={handleCloseMenu}
+					anchorOrigin={{
+						vertical: 'top', // Change from 'bottom' to 'top'
+						horizontal: 'left',
+					}}
+					transformOrigin={{
+						vertical: 'bottom', // Uncomment and set to 'bottom'
+						horizontal: 'left',
+					}}
 				>
 					{knowledgeUnitSchemas.map((schema) => (
 						<MenuItem
 							key={schema.frameId}
 							onClick={() => handleAddKU(schema.frameId)}
+							sx={{ width: 285 }} // TODO: Fix temporary fixed width
 						>
 							{schema.frameLabel}
 						</MenuItem>

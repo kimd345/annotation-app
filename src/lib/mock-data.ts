@@ -1,7 +1,13 @@
-import { Document, KnowledgeUnitSchema } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
-const txtFilesModules = import.meta.glob('./txt/*.txt', { eager: true, as: 'raw' });
+import { Document, KnowledgeUnitSchema, CustomFieldType } from '../types';
+import useAnnotationStore from '@/store/use-annotation-store';
+
+
+const txtFilesModules = import.meta.glob('./txt/*.txt', {
+	eager: true,
+	as: 'raw',
+});
 
 const loadTxtFiles = async (): Promise<Document[]> => {
 	const documents: Document[] = [];
@@ -69,9 +75,9 @@ export const knowledgeUnitSchemas: KnowledgeUnitSchema[] = [
 			{
 				name: 'Time',
 				id: 'time',
-				type: ['email-date', 'past', 'future'],
+				type: 'CUSTOM_DATE', // Changed to use custom date type
 				required: false,
-				multiple: true,
+				multiple: false,
 			},
 		],
 	},
@@ -107,6 +113,13 @@ export const knowledgeUnitSchemas: KnowledgeUnitSchema[] = [
 				required: false,
 				multiple: false,
 			},
+			{
+				name: 'Location',
+				id: 'location',
+				type: 'CUSTOM_LOCATION', // Added custom location type
+				required: false,
+				multiple: false,
+			}
 		],
 	},
 	{
@@ -148,6 +161,117 @@ export const knowledgeUnitSchemas: KnowledgeUnitSchema[] = [
 				required: false,
 				multiple: false,
 			},
+			{
+				name: 'Start Date',
+				id: 'startDate',
+				type: 'CUSTOM_DATE', // Added custom date type
+				required: false, 
+				multiple: false
+			},
+			{
+				name: 'End Date',
+				id: 'endDate',
+				type: 'CUSTOM_DATE', // Added custom date type
+				required: false,
+				multiple: false
+			},
+		],
+	},
+];
+
+// Sample custom field types
+export const customFieldTypes: CustomFieldType[] = [
+	{
+		typeId: 'CUSTOM_DATE',
+		typeLabel: 'Date',
+		fields: [
+			{
+				id: 'month',
+				name: 'Month',
+				type: [
+					'January',
+					'February',
+					'March',
+					'April',
+					'May',
+					'June',
+					'July',
+					'August',
+					'September',
+					'October',
+					'November',
+					'December',
+				],
+				required: false,
+			},
+			{
+				id: 'day',
+				name: 'Day',
+				type: [
+					'1',
+					'2',
+					'3',
+					'4',
+					'5',
+					'6',
+					'7',
+					'8',
+					'9',
+					'10',
+					'11',
+					'12',
+					'13',
+					'14',
+					'15',
+					'16',
+					'17',
+					'18',
+					'19',
+					'20',
+					'21',
+					'22',
+					'23',
+					'24',
+					'25',
+					'26',
+					'27',
+					'28',
+					'29',
+					'30',
+					'31',
+				],
+				required: false,
+			},
+			{
+				id: 'year',
+				name: 'Year',
+				type: 'integer',
+				required: false,
+			},
+		],
+	},
+	{
+		typeId: 'CUSTOM_LOCATION',
+		typeLabel: 'Location',
+		fields: [
+			{
+				id: 'country',
+				name: 'Country',
+				type: 'DYNAMIC_COUNTRIES',
+				required: true,
+			},
+			{
+				id: 'city',
+				name: 'City',
+				type: 'string',
+				required: false,
+			},
+			{
+				id: 'address',
+				name: 'Address',
+				type: 'string',
+				required: false,
+			},
 		],
 	},
 ];
@@ -174,13 +298,40 @@ export const dynamicLists = {
 		'Global Solutions',
 		'Data Systems Inc',
 	],
+	DYNAMIC_COUNTRIES: [
+		'United States',
+		'Canada',
+		'United Kingdom',
+		'France',
+		'Germany',
+		'Japan',
+		'China',
+		'India',
+		'Australia',
+		'Brazil',
+		'Mexico',
+		'South Africa',
+		'Russia',
+		'Italy',
+		'Spain',
+	],
 };
+
 
 // Initialize store function
 export const initializeStore = (
-	setDocuments: (docs: Document[]) => void,
-	setKnowledgeUnitSchemas: (schemas: KnowledgeUnitSchema[]) => void
+	// setDocuments: (docs: Document[]) => void,
+	// setKnowledgeUnitSchemas: (schemas: KnowledgeUnitSchema[]) => void
 ): void => {
-	setDocuments(dummyDocuments);
-	setKnowledgeUnitSchemas(knowledgeUnitSchemas);
+	// Use the store's actions to set the data
+	const store = useAnnotationStore.getState();
+	
+	// Set documents
+	store.documents = dummyDocuments;
+	
+	// Set schemas
+	store.knowledgeUnitSchemas = knowledgeUnitSchemas;
+	
+	// Set custom field types
+	store.customFieldTypes = customFieldTypes;
 };

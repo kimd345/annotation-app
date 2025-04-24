@@ -1,52 +1,73 @@
-import React from 'react';
-import { Box } from '@mui/material';
-import DocumentList from './features/documents/list-pane';
+import { useEffect } from 'react';
+import { Box, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import DocumentView from './features/documents/view-pane';
+import DocumentList from './features/documents/list-pane';
 import AnnotationPanel from './features/annotations/annotation-pane';
-import useAnnotationStore from './store/use-annotation-store';
-import { dummyDocuments, knowledgeUnitSchemas } from './lib/mock-data';
+import CustomFieldModal from './features/annotations/custom-field-modal';
+import { initializeStore } from './lib/mock-data';
 
-import './App.css';
+// Create a theme instance
+const theme = createTheme({
+	palette: {
+		primary: {
+			main: '#1976d2',
+		},
+		secondary: {
+			main: '#dc004e',
+		},
+	},
+});
 
 function App() {
-	// Initialize store with dummy data
-	React.useEffect(() => {
-		const store = useAnnotationStore.getState();
-
-		// Set dummy documents and schemas
-		store.documents = dummyDocuments;
-		store.knowledgeUnitSchemas = knowledgeUnitSchemas;
-
-		// Select the first document by default
-		if (dummyDocuments.length > 0) {
-			store.selectDocument(dummyDocuments[0].id);
-		}
+	// Initialize store
+	useEffect(() => {
+		initializeStore();
 	}, []);
 
 	return (
-		<>
-			<Box
-				sx={{
-					display: 'flex',
-					height: '90vh',	// TODO: Fix responsiveness
-					overflow: 'hidden',
-					backgroundColor: '#f5f5f5',
-				}}
-			>
-				{/* Three-panel layout */}
-				<Box sx={{ width: '20%', height: '100%' }}>
+		<ThemeProvider theme={theme}>
+			<CssBaseline />
+			<Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+				{/* Left sidebar - Document list */}
+				<Box
+					sx={{
+						width: 250,
+						flexShrink: 0,
+						borderRight: '1px solid #e0e0e0',
+						overflow: 'auto',
+					}}
+				>
 					<DocumentList />
 				</Box>
 
-				<Box sx={{ width: '45%', height: '100%' }}>
+				{/* Main content - Document viewer */}
+				{/* TODO: Fix width */}
+				<Box
+					sx={{
+						flex: 1,
+						overflow: 'auto',
+						width: 'calc(100vw - 250px - 420px)',
+					}}
+				>
 					<DocumentView />
 				</Box>
 
-				<Box sx={{ width: '35%', height: '100%' }}>
+				{/* Right sidebar - Annotation panel */}
+				<Box
+					sx={{
+						width: 420,
+						flexShrink: 0,
+						borderLeft: '1px solid #e0e0e0',
+						overflow: 'auto',
+					}}
+				>
 					<AnnotationPanel />
 				</Box>
 			</Box>
-		</>
+
+			{/* Custom field modal - global component */}
+			<CustomFieldModal />
+		</ThemeProvider>
 	);
 }
 

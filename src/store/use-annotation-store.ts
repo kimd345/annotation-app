@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 
-import { KnowledgeUnit, AnnotationStore } from '../types';
+import { KnowledgeUnit, AnnotationStore, ActiveCustomField } from '../types';
+import { customFieldTypes } from '../lib/mock-data';
 
 const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 	// Initial state
@@ -10,7 +11,10 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 	knowledgeUnits: [],
 	selectedDocumentId: null,
 	activeHighlightFieldId: null,
-	hoveredFieldId: null, // Add this to track hovered field
+	hoveredFieldId: null,
+	customFieldTypes: customFieldTypes, // Initialize with the custom field types
+	isCustomFieldModalOpen: false,
+	activeCustomField: null,
 
 	// Actions
 	selectDocument: (documentId) => {
@@ -62,6 +66,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		}));
 	},
 
+	// Modified version of addFieldToKU function
 	addFieldToKU: (kuId, fieldId) => {
 		const { knowledgeUnits, knowledgeUnitSchemas } = get();
 
@@ -74,6 +79,18 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		const fieldSchema = schema.fields.find((f) => f.id === fieldId);
 		if (!fieldSchema) return;
 
+		// Check if this is a custom field type
+		if (
+			typeof fieldSchema.type === 'string' &&
+			fieldSchema.type.startsWith('CUSTOM_')
+		) {
+			// Open the modal instead of adding the field immediately
+			const openCustomFieldModal = get().openCustomFieldModal;
+			openCustomFieldModal(kuId, fieldId, fieldSchema.type);
+			return;
+		}
+
+		// For regular fields, add them immediately as before
 		set((state) => ({
 			knowledgeUnits: state.knowledgeUnits.map((ku) =>
 				ku.id === kuId
@@ -103,9 +120,29 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		set({ activeHighlightFieldId: fieldId });
 	},
 
-	// Add this new function to handle hover state
 	setHoveredField: (fieldId) => {
 		set({ hoveredFieldId: fieldId });
+	},
+
+	// Custom field modal actions
+	// Updated openCustomFieldModal function
+	openCustomFieldModal: (kuId, fieldId, fieldType) => {
+		const activeCustomField: ActiveCustomField = {
+			kuId,
+			fieldId,
+			fieldType,
+		}; 
+		set({
+			isCustomFieldModalOpen: true,
+			activeCustomField,
+		});
+	},
+
+	closeCustomFieldModal: () => {
+		set({
+			isCustomFieldModalOpen: false,
+			activeCustomField: null,
+		});
 	},
 
 	addHighlight: (highlight) => {
@@ -142,7 +179,6 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		}));
 	},
 
-	// Add this new function to find the KU and field for a highlight
 	findFieldByHighlightId: (highlightId) => {
 		const { knowledgeUnits } = get();
 		for (const ku of knowledgeUnits) {
