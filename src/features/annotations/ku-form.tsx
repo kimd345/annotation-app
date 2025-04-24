@@ -64,6 +64,7 @@ const KnowledgeUnitForm = ({
 	const handleAddField = (fieldId: string) => {
 		const addFieldToKU = useAnnotationStore.getState().addFieldToKU;
 		addFieldToKU(kuId, fieldId);
+		console.log('After addFieldToKU:', useAnnotationStore.getState());
 		handleCloseMenu();
 	};
 

@@ -86,7 +86,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		) {
 			// Open the modal instead of adding the field immediately
 			const openCustomFieldModal = get().openCustomFieldModal;
-			openCustomFieldModal(kuId, fieldId, fieldSchema.type);
+			openCustomFieldModal(kuId, fieldId, fieldSchema.type, true); // Pass 'true' to indicate this is a new field
 			return;
 		}
 
@@ -126,12 +126,13 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 
 	// Custom field modal actions
 	// Updated openCustomFieldModal function
-	openCustomFieldModal: (kuId, fieldId, fieldType) => {
+	openCustomFieldModal: (kuId, fieldId, fieldType, isNewField = false) => {
 		const activeCustomField: ActiveCustomField = {
 			kuId,
 			fieldId,
 			fieldType,
-		}; 
+			isNewField, // Add this flag to track if this is a new field
+		};
 		set({
 			isCustomFieldModalOpen: true,
 			activeCustomField,

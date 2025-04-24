@@ -59,10 +59,10 @@ export interface CustomFieldType {
 
 // Updated ActiveCustomField interface
 export interface ActiveCustomField {
-  kuId: string;
-  fieldId: string;
-  fieldType: string;
-  isNewField?: boolean; // Add this optional flag
+	kuId: string;
+	fieldId: string;
+	fieldType: string;
+	isNewField?: boolean; // Add this optional flag
 }
 
 // Zustand store
