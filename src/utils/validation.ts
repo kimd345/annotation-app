@@ -1,5 +1,5 @@
 // src/utils/validation.ts
-import { Field, KnowledgeUnit, CustomFieldType } from '@/types';
+import { Field, KnowledgeUnit } from '@/types';
 
 /**
  * Utility functions for form validation
@@ -11,7 +11,7 @@ import { Field, KnowledgeUnit, CustomFieldType } from '@/types';
  * @returns true if valid, error message if invalid
  */
 export const validateCustomFieldHasValue = (
-	values: Record<string, any>
+	values: Record<string, unknown>
 ): boolean | string => {
 	if (!values) return 'Field cannot be empty';
 
@@ -33,7 +33,7 @@ export const validateCustomFieldHasValue = (
  * @returns true if valid, error message if invalid
  */
 export const validateFieldValue = (
-	value: any,
+	value: unknown,
 	fieldType: string | string[]
 ): boolean | string => {
 	// Skip empty values for optional fields
@@ -85,7 +85,7 @@ export const validateFieldValue = (
 			return true;
 		}
 
-		return fieldType.includes(value) || value === '' || 'Not a valid option';
+		return (typeof value === 'string' && fieldType.includes(value)) || (value === '') || 'Not a valid option';
 	}
 
 	// Handle custom field types
@@ -174,7 +174,7 @@ export const validateKnowledgeUnit = (
 			// Validate field type
 			const typeValidation = validateFieldValue(field.value, field.type);
 			if (typeValidation !== true) {
-				fieldErrors.push(typeValidation);
+				fieldErrors.push(typeValidation as string);
 			}
 
 			// Validate highlights

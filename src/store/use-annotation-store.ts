@@ -88,6 +88,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		) {
 			// Open the modal instead of adding the field immediately
 			const openCustomFieldModal = get().openCustomFieldModal;
+			// @ts-expect-error
 			openCustomFieldModal(kuId, fieldId, fieldSchema.type, true); // Pass 'true' to indicate this is a new field
 			return;
 		}
@@ -195,7 +196,7 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		return null;
 	},
 
-	exportAnnotations: () => {
+	exportAnnotations: (): any => {
 		const { knowledgeUnits, documents } = get();
 
 		// Format the data as needed for export

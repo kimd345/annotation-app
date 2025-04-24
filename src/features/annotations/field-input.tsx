@@ -1,34 +1,27 @@
 // src/features/annotations/field-input.tsx
 import {
-	Controller,
-	Control,
-	FieldErrors,
-	useFormContext,
+  Control,
+  FieldErrors,
+  useFormContext,
 } from 'react-hook-form';
 import {
-	Autocomplete,
-	Badge,
-	Box,
-	Chip,
-	FormControl,
-	FormHelperText,
-	IconButton,
-	MenuItem,
-	Select,
-	TextField,
-	Tooltip,
-	Typography,
+  Box,
+  FormHelperText,
+  IconButton,
+  Typography,
 } from '@mui/material';
-import ClearIcon from '@mui/icons-material/Clear';
 import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import HighlightIcon from '@mui/icons-material/Highlight';
 import { useShallow } from 'zustand/shallow';
 import useAnnotationStore from '@/store/use-annotation-store';
-import { dynamicLists } from '@/lib/mock-data';
-import { getColorForField } from '@/utils/format';
+import { useFieldValidation } from '@/hooks/use-field-validation';
+import StringField from '@/components/fields/StringField';
+import IntegerField from '@/components/fields/IntegerField';
+import CustomField from '@/components/fields/CustomField';
+import SelectField from '@/components/fields/SelectField';
+import AutocompleteField from '@/components/fields/AutocompleteField';
+import HighlightButton from '@/components/fields/HighlightButton';
 
-// Custom field types renderer
+// Main field input component
 const FieldInput = ({
 	field,
 	index,
@@ -36,6 +29,7 @@ const FieldInput = ({
 	errors,
 	kuId,
 	setActiveHighlightField,
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	validateHighlights,
 	required,
 }: {
@@ -47,26 +41,23 @@ const FieldInput = ({
 		required?: boolean;
 		highlights?: Array<{ id: string }>;
 	};
-	control: Control;
+	control: Control<any>;
 	errors: FieldErrors<{ fields: { value: unknown; highlights: unknown[] }[] }>;
 	index: number;
 	kuId: string;
 	setActiveHighlightField: (id: string | null) => void;
 	validateHighlights: (
-		highlights: any[],
+		highlights: Array<{ id: string }>,
 		fieldId: string,
 		required: boolean
 	) => boolean | string;
 	required: boolean;
 }) => {
-	const { type, name, id, multiple } = field;
-
-	// Get form context for additional validation
-	const { getValues, setValue, register, trigger } = useFormContext();
+	const { type, name, id, multiple = false } = field;
+	const { trigger } = useFormContext();
 
 	// Get field value and state from store
 	const {
-		updateFieldValue,
 		removeFieldFromKU,
 		setHoveredField,
 		knowledgeUnits,
@@ -74,7 +65,6 @@ const FieldInput = ({
 		removeHighlight,
 	} = useAnnotationStore(
 		useShallow((state) => ({
-			updateFieldValue: state.updateFieldValue,
 			removeFieldFromKU: state.removeFieldFromKU,
 			setHoveredField: state.setHoveredField,
 			knowledgeUnits: state.knowledgeUnits,
@@ -102,332 +92,20 @@ const FieldInput = ({
 	const hasHighlights = fieldHighlights.length > 0;
 	const isActive = activeHighlightFieldId === id;
 
-	// Get field color for highlights
-	const getFieldColor = () => getColorForField(id);
-
 	// Check if field has validation errors
 	const hasFieldError = !!errors?.fields?.[index]?.value;
 	const hasHighlightError = !!errors?.fields?.[index]?.highlights;
 
-	// Set up validation rules based on field type
-	const getValidationRules = () => {
-		const rules: any = {};
+	// Use the validation hook
+	const {
+		getValidationRules,
+		registerHighlightValidation,
+		triggerHighlightValidation,
+	} = useFieldValidation(id, name, type, required, index, fieldHighlights);
 
-		// Required field validation with special handling for multiple select
-		if (required) {
-			if (multiple) {
-				// For multiple select, validate array length instead of using 'required'
-				rules.validate = {
-					...rules.validate,
-					required: (value: any) => {
-						return (
-							(Array.isArray(value) && value.length > 0) ||
-							`${name} is required`
-						);
-					},
-				};
-			} else {
-				rules.required = `${name} is required`;
-			}
-		}
-
-		// Type-specific validation
-		if (type === 'integer') {
-			rules.pattern = {
-				value: /^-?\d+$/,
-				message: 'Please enter a valid integer',
-			};
-
-			// Convert to number on validation
-			rules.setValueAs = (value: string) =>
-				value === '' ? '' : parseInt(value, 10);
-		}
-
-		// Add highlight validation
-		rules.validate = {
-			...(rules.validate || {}),
-			highlights: (value: any) =>
-				validateHighlights(fieldHighlights, id, required),
-		};
-
-		return rules;
-	};
-
-	// Function to handle field type rendering
-	const renderFieldInput = () => {
-		// Handle string type
-		if (type === 'string') {
-			return (
-				<Controller
-					name={`fields.${index}.value`}
-					control={control}
-					defaultValue=''
-					rules={getValidationRules()}
-					render={({ field: renderField, fieldState }) => (
-						<TextField
-							{...renderField}
-							fullWidth
-							size='small'
-							label={name}
-							error={!!fieldState.error}
-							helperText={fieldState.error?.message}
-							onChange={(e) => {
-								renderField.onChange(e);
-								updateFieldValue(kuId, id, e.target.value);
-								// Register highlights for validation
-								register(`fields.${index}.highlights`, {
-									validate: () =>
-										validateHighlights(fieldHighlights, id, required),
-								});
-								trigger(`fields.${index}.highlights`);
-							}}
-							onMouseEnter={() => setHoveredField(id)}
-							onMouseLeave={() => setHoveredField(null)}
-							required={required}
-						/>
-					)}
-				/>
-			);
-		}
-
-		// Handle integer type
-		if (type === 'integer') {
-			return (
-				<Controller
-					name={`fields.${index}.value`}
-					control={control}
-					defaultValue=''
-					rules={getValidationRules()}
-					render={({ field: renderField, fieldState }) => (
-						<TextField
-							{...renderField}
-							fullWidth
-							size='small'
-							label={name}
-							type='number'
-							error={!!fieldState.error}
-							helperText={fieldState.error?.message}
-							onChange={(e) => {
-								renderField.onChange(e);
-								const value =
-									e.target.value === '' ? '' : parseInt(e.target.value, 10);
-								updateFieldValue(kuId, id, value);
-								trigger(`fields.${index}.highlights`);
-							}}
-							onMouseEnter={() => setHoveredField(id)}
-							onMouseLeave={() => setHoveredField(null)}
-							required={required}
-						/>
-					)}
-				/>
-			);
-		}
-
-		// Handle custom field types
-		if (typeof type === 'string' && type.startsWith('CUSTOM_')) {
-			return (
-				<Controller
-					name={`fields.${index}.value`}
-					control={control}
-					defaultValue=''
-					rules={getValidationRules()}
-					render={({ field: renderField, fieldState }) => (
-						<Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-							<TextField
-								{...renderField}
-								fullWidth
-								size='small'
-								label={name}
-								error={!!fieldState.error}
-								helperText={fieldState.error?.message}
-								disabled={true}
-								value={
-									renderField.value
-										? typeof renderField.value === 'object'
-											? JSON.stringify(renderField.value).substring(0, 20) +
-											  '...'
-											: renderField.value
-										: ''
-								}
-								onMouseEnter={() => setHoveredField(id)}
-								onMouseLeave={() => setHoveredField(null)}
-								required={required}
-							/>
-							<IconButton
-								onClick={() => {
-									// Open custom field modal
-									const openCustomFieldModal =
-										useAnnotationStore.getState().openCustomFieldModal;
-									openCustomFieldModal(kuId, id, type);
-								}}
-							>
-								<Tooltip title='View or edit custom field'>
-									<EditIcon />
-								</Tooltip>
-							</IconButton>
-						</Box>
-					)}
-				/>
-			);
-		}
-
-		// Handle dropdown type (array of options)
-		if (Array.isArray(type)) {
-			// Check if it's a dynamic list or special list type
-			const isDynamicList = type.some((t) => t.startsWith('DYNAMIC_'));
-			const isSpecialList = type.some((t) => t.startsWith('LIST_'));
-			const isList = isDynamicList || isSpecialList;
-
-			if (isList) {
-				// Get all possible options from dynamic lists
-				let options: string[] = [];
-
-				type.forEach((t) => {
-					if (t.startsWith('DYNAMIC_')) {
-						const listName = t as keyof typeof dynamicLists;
-						if (dynamicLists[listName]) {
-							options = [...options, ...dynamicLists[listName]];
-						}
-					} else if (t === 'LIST_PERSON') {
-						// Map LIST_PERSON to DYNAMIC_PEOPLE
-						options = [...options, ...dynamicLists['DYNAMIC_PEOPLE']];
-					} else if (t === 'LIST_COMPANY') {
-						// Map LIST_COMPANY to DYNAMIC_ORG
-						options = [...options, ...dynamicLists['DYNAMIC_ORG']];
-					} else if (
-						typeof t === 'string' &&
-						!t.startsWith('DYNAMIC_') &&
-						!t.startsWith('LIST_')
-					) {
-						options.push(t);
-					}
-				});
-
-				// We don't need placeholder options anymore since we properly map list types
-				// to their data sources
-
-				// Render autocomplete for large lists
-				return (
-					<Controller
-						name={`fields.${index}.value`}
-						control={control}
-						defaultValue={multiple ? [] : null}
-						rules={getValidationRules()}
-						render={({
-							field: { onChange, value, ...restField },
-							fieldState,
-						}) => (
-							<Autocomplete
-								{...restField}
-								multiple={multiple}
-								options={options}
-								getOptionLabel={(option) => option}
-								renderInput={(params) => (
-									<TextField
-										{...params}
-										label={name}
-										size='small'
-										error={!!fieldState.error}
-										helperText={fieldState.error?.message}
-										required={required}
-									/>
-								)}
-								value={value || (multiple ? [] : null)}
-								onChange={(_, newValue) => {
-									onChange(newValue);
-									updateFieldValue(kuId, id, newValue);
-									trigger(`fields.${index}.highlights`);
-								}}
-								filterOptions={(options, { inputValue }) => {
-									const filtered = options.filter((option) =>
-										option.toLowerCase().includes(inputValue.toLowerCase())
-									);
-									return filtered;
-								}}
-								onMouseEnter={() => setHoveredField(id)}
-								onMouseLeave={() => setHoveredField(null)}
-							/>
-						)}
-					/>
-				);
-			} else {
-				// Regular dropdown for small lists
-				return (
-					<Controller
-						name={`fields.${index}.value`}
-						control={control}
-						defaultValue={multiple ? [] : ''}
-						rules={getValidationRules()}
-						render={({ field: renderField, fieldState }) => (
-							<FormControl
-								fullWidth
-								size='small'
-								error={!!fieldState.error}
-								required={required}
-								onMouseEnter={() => setHoveredField(id)}
-								onMouseLeave={() => setHoveredField(null)}
-							>
-								<Select
-									{...renderField}
-									multiple={multiple}
-									displayEmpty
-									renderValue={(selected) => {
-										if (multiple) {
-											// Ensure selected is always an array
-											const selectedArray = Array.isArray(selected)
-												? selected
-												: selected
-												? [selected]
-												: [];
-											return (
-												<Box
-													sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}
-												>
-													{selectedArray.map((value) => (
-														<Chip key={value} label={value} size='small' />
-													))}
-												</Box>
-											);
-										}
-										return selected ? (
-											selected
-										) : (
-											<Typography color='text.secondary'>{name}</Typography>
-										);
-									}}
-									onChange={(e) => {
-										renderField.onChange(e);
-										updateFieldValue(kuId, id, e.target.value);
-										trigger(`fields.${index}.highlights`);
-									}}
-								>
-									{type.map((option) => (
-										<MenuItem key={option} value={option}>
-											{option}
-										</MenuItem>
-									))}
-								</Select>
-								{fieldState.error && (
-									<FormHelperText>{fieldState.error.message}</FormHelperText>
-								)}
-							</FormControl>
-						)}
-					/>
-				);
-			}
-		}
-
-		// Default fallback
-		return (
-			<Typography color='error'>
-				Unsupported field type: {JSON.stringify(type)}
-			</Typography>
-		);
-	};
-
+	// Handle highlight field toggle
 	const handleHighlightFieldClick = () => {
-		const highlightFieldId =
-			useAnnotationStore.getState().activeHighlightFieldId;
+		const highlightFieldId = activeHighlightFieldId;
 		if (highlightFieldId === id) {
 			setActiveHighlightField(null);
 		} else {
@@ -447,9 +125,129 @@ const FieldInput = ({
 	};
 
 	// Register highlights field for validation
-	register(`fields.${index}.highlights`, {
-		validate: () => validateHighlights(fieldHighlights, id, required),
-	});
+	registerHighlightValidation();
+
+	// Function to handle field type rendering
+	const renderFieldInput = () => {
+		// Handle string type
+		if (type === 'string') {
+			return (
+				<StringField
+					index={index}
+					control={control}
+					field={{
+						id,
+						name,
+						required,
+					}}
+					kuId={kuId}
+					required={required}
+					setHoveredField={setHoveredField}
+					triggerHighlightValidation={triggerHighlightValidation}
+					validationRules={getValidationRules()}
+				/>
+			);
+		}
+
+		// Handle integer type
+		if (type === 'integer') {
+			return (
+				<IntegerField
+					index={index}
+					control={control}
+					field={{
+						id,
+						name,
+						required,
+					}}
+					kuId={kuId}
+					required={required}
+					setHoveredField={setHoveredField}
+					triggerHighlightValidation={triggerHighlightValidation}
+					validationRules={getValidationRules()}
+				/>
+			);
+		}
+
+		// Handle custom field types
+		if (typeof type === 'string' && type.startsWith('CUSTOM_')) {
+			return (
+				<CustomField
+					index={index}
+					control={control}
+					field={{
+						id,
+						name,
+						type,
+						required,
+					}}
+					kuId={kuId}
+					required={required}
+					setHoveredField={setHoveredField}
+					validationRules={getValidationRules()}
+				/>
+			);
+		}
+
+		// Handle dropdown type (array of options)
+		if (Array.isArray(type)) {
+			// Check if it's a dynamic list or special list type
+			const isDynamicList = type.some((t) => t.startsWith('DYNAMIC_'));
+			const isSpecialList = type.some((t) => t.startsWith('LIST_'));
+			const isList = isDynamicList || isSpecialList;
+
+			if (isList) {
+				// Render autocomplete for large lists
+				return (
+					<AutocompleteField
+						index={index}
+						control={control}
+						field={{
+							id,
+							name,
+							type,
+							multiple,
+							required,
+						}}
+						kuId={kuId}
+						multiple={multiple}
+						required={required}
+						setHoveredField={setHoveredField}
+						triggerHighlightValidation={triggerHighlightValidation}
+						validationRules={getValidationRules()}
+					/>
+				);
+			} else {
+				// Regular dropdown for small lists
+				return (
+					<SelectField
+						index={index}
+						control={control}
+						field={{
+							id,
+							name,
+							type,
+							multiple,
+							required,
+						}}
+						kuId={kuId}
+						multiple={multiple}
+						required={required}
+						setHoveredField={setHoveredField}
+						triggerHighlightValidation={triggerHighlightValidation}
+						validationRules={getValidationRules()}
+					/>
+				);
+			}
+		}
+
+		// Default fallback
+		return (
+			<Typography color='error'>
+				Unsupported field type: {JSON.stringify(type)}
+			</Typography>
+		);
+	};
 
 	return (
 		<Box
@@ -465,61 +263,20 @@ const FieldInput = ({
 			}}
 			onMouseEnter={() => setHoveredField(id)}
 			onMouseLeave={() => setHoveredField(null)}
+			data-field-id={id}
 		>
 			<Box sx={{ flexGrow: 1 }}>{renderFieldInput()}</Box>
 
-			{/* Highlight button with badge showing count */}
-			<Badge
-				badgeContent={fieldHighlights.length}
-				color={hasHighlightError ? 'error' : 'primary'}
-				invisible={!hasHighlights}
-				sx={{ mx: 1 }}
-			>
-				<IconButton
-					sx={{
-						// Updated styling - show error state
-						borderColor: hasHighlightError
-							? 'error.main'
-							: isActive
-							? getFieldColor()
-							: 'transparent',
-						borderWidth: isActive || hasHighlightError ? 1 : 0,
-						borderStyle: 'solid',
-						// Handle icon color based on highlights
-						color: hasHighlightError
-							? 'error.main'
-							: hasHighlights
-							? getFieldColor()
-							: 'action.disabled',
-						// Remove focus outline/border
-						'&:focus': {
-							outline: 'none',
-						},
-						'&.Mui-focusVisible': {
-							outline: 'none',
-							border: 'none',
-						},
-					}}
-					onClick={handleHighlightFieldClick}
-					aria-label='Highlight evidence'
-				>
-					<HighlightIcon />
-				</IconButton>
-			</Badge>
-
-			{/* Clear all highlights button - only visible when highlights exist */}
-			{hasHighlights && (
-				<Tooltip title='Clear all highlights'>
-					<IconButton
-						size='small'
-						onClick={handleClearAllHighlights}
-						color='default'
-						sx={{ mr: 1 }}
-					>
-						<ClearIcon fontSize='small' />
-					</IconButton>
-				</Tooltip>
-			)}
+			{/* Highlight button component */}
+			<HighlightButton
+				fieldId={id}
+				isActive={isActive}
+				hasHighlights={hasHighlights}
+				highlightCount={fieldHighlights.length}
+				hasHighlightError={hasHighlightError}
+				onHighlightClick={handleHighlightFieldClick}
+				onClearAllHighlights={handleClearAllHighlights}
+			/>
 
 			{/* Delete field button for optional fields */}
 			{!required && (

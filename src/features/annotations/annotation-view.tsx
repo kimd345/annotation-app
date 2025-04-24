@@ -15,7 +15,7 @@ import KnowledgeUnitForm from './ku-form';
 import ValidationExport from './validation-export';
 import { useShallow } from 'zustand/shallow';
 
-const AnnotationPanel = () => {
+const AnnotationView = () => {
 	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
 	const {
@@ -139,4 +139,4 @@ const AnnotationPanel = () => {
 	);
 };
 
-export default AnnotationPanel;
+export default AnnotationView;

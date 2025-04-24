@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Box, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
-import DocumentView from './features/documents/view-pane';
-import DocumentList from './features/documents/list-pane';
-import AnnotationPanel from './features/annotations/annotation-pane';
+import DocumentView from './features/documents/document-view';
+import ListView from './features/documents/list-view';
+import AnnotationView from './features/annotations/annotation-view';
 import CustomFieldModal from './features/annotations/custom-field-modal';
 import { initializeStore } from './lib/mock-data';
 
@@ -37,7 +37,7 @@ function App() {
 						overflow: 'auto',
 					}}
 				>
-					<DocumentList />
+					<ListView />
 				</Box>
 
 				{/* Main content - Document viewer */}
@@ -61,7 +61,7 @@ function App() {
 						overflow: 'auto',
 					}}
 				>
-					<AnnotationPanel />
+					<AnnotationView />
 				</Box>
 			</Box>
 
