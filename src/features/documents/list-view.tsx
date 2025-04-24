@@ -14,7 +14,7 @@ import BookmarkIcon from '@mui/icons-material/Bookmark';
 import { useShallow } from 'zustand/shallow';
 import useAnnotationStore from '@/store/use-annotation-store';
 
-const DocumentList = () => {
+const ListView = () => {
 	const { documents, selectedDocumentId, selectDocument } = useAnnotationStore(
 		// https://zustand.docs.pmnd.rs/hooks/use-shallow#useshallow-%E2%9A%9B%EF%B8%8F
 		// Component re-renders whenever any part of the state changes, causing infinite re-render loop.
@@ -166,4 +166,4 @@ const DocumentList = () => {
 	);
 };
 
-export default DocumentList;
+export default ListView;
