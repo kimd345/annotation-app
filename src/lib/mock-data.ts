@@ -49,14 +49,14 @@ export const knowledgeUnitSchemas: KnowledgeUnitSchema[] = [
 				id: 'person',
 				type: ['LIST_PERSON'],
 				required: true,
-				multiple: true,
+				multiple: false,
 			},
 			{
 				name: 'Company',
 				id: 'company',
 				type: ['LIST_COMPANY'],
 				required: false,
-				multiple: true,
+				multiple: false,
 			},
 			{
 				name: 'Title',

@@ -39,6 +39,8 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 				.map((f) => ({
 					...f,
 					highlights: [],
+					// Initialize value based on field type
+					value: f.multiple ? [] : '',
 				})),
 		};
 

@@ -1,4 +1,10 @@
-import { Controller, Control, FieldErrors } from 'react-hook-form';
+// src/features/annotations/field-input.tsx
+import {
+	Controller,
+	Control,
+	FieldErrors,
+	useFormContext,
+} from 'react-hook-form';
 import {
 	Autocomplete,
 	Badge,
@@ -25,11 +31,13 @@ import { getColorForField } from '@/utils/format';
 // Custom field types renderer
 const FieldInput = ({
 	field,
+	index,
 	control,
 	errors,
-	index,
 	kuId,
 	setActiveHighlightField,
+	validateHighlights,
+	required,
 }: {
 	field: {
 		type: string | string[];
@@ -40,12 +48,21 @@ const FieldInput = ({
 		highlights?: Array<{ id: string }>;
 	};
 	control: Control;
-	errors: FieldErrors<{ fields: { value: unknown }[] }>;
+	errors: FieldErrors<{ fields: { value: unknown; highlights: unknown[] }[] }>;
 	index: number;
 	kuId: string;
 	setActiveHighlightField: (id: string | null) => void;
+	validateHighlights: (
+		highlights: any[],
+		fieldId: string,
+		required: boolean
+	) => boolean | string;
+	required: boolean;
 }) => {
-	const { type, name, id, multiple, required } = field;
+	const { type, name, id, multiple } = field;
+
+	// Get form context for additional validation
+	const { getValues, setValue, register, trigger } = useFormContext();
 
 	// Get field value and state from store
 	const {
@@ -68,11 +85,16 @@ const FieldInput = ({
 
 	// Function to get field highlights
 	const getFieldHighlights = () => {
-		const ku = knowledgeUnits.find((ku) => ku.id === kuId);
-		if (!ku) return [];
+		try {
+			const ku = knowledgeUnits.find((ku) => ku.id === kuId);
+			if (!ku) return [];
 
-		const fieldData = ku.fields.find((f) => f.id === id);
-		return fieldData?.highlights || [];
+			const fieldData = ku.fields.find((f) => f.id === id);
+			return fieldData?.highlights || [];
+		} catch (error) {
+			console.error('Error getting field highlights:', error);
+			return [];
+		}
 	};
 
 	// Get the field's highlight state
@@ -83,6 +105,54 @@ const FieldInput = ({
 	// Get field color for highlights
 	const getFieldColor = () => getColorForField(id);
 
+	// Check if field has validation errors
+	const hasFieldError = !!errors?.fields?.[index]?.value;
+	const hasHighlightError = !!errors?.fields?.[index]?.highlights;
+
+	// Set up validation rules based on field type
+	const getValidationRules = () => {
+		const rules: any = {};
+
+		// Required field validation with special handling for multiple select
+		if (required) {
+			if (multiple) {
+				// For multiple select, validate array length instead of using 'required'
+				rules.validate = {
+					...rules.validate,
+					required: (value: any) => {
+						return (
+							(Array.isArray(value) && value.length > 0) ||
+							`${name} is required`
+						);
+					},
+				};
+			} else {
+				rules.required = `${name} is required`;
+			}
+		}
+
+		// Type-specific validation
+		if (type === 'integer') {
+			rules.pattern = {
+				value: /^-?\d+$/,
+				message: 'Please enter a valid integer',
+			};
+
+			// Convert to number on validation
+			rules.setValueAs = (value: string) =>
+				value === '' ? '' : parseInt(value, 10);
+		}
+
+		// Add highlight validation
+		rules.validate = {
+			...(rules.validate || {}),
+			highlights: (value: any) =>
+				validateHighlights(fieldHighlights, id, required),
+		};
+
+		return rules;
+	};
+
 	// Function to handle field type rendering
 	const renderFieldInput = () => {
 		// Handle string type
@@ -92,21 +162,28 @@ const FieldInput = ({
 					name={`fields.${index}.value`}
 					control={control}
 					defaultValue=''
-					rules={{ required: required ? `${name} is required` : false }}
-					render={({ field: renderField }) => (
+					rules={getValidationRules()}
+					render={({ field: renderField, fieldState }) => (
 						<TextField
 							{...renderField}
 							fullWidth
 							size='small'
 							label={name}
-							error={!!errors.fields?.[index]?.value?.message}
-							helperText={errors.fields?.[index]?.value?.message}
+							error={!!fieldState.error}
+							helperText={fieldState.error?.message}
 							onChange={(e) => {
 								renderField.onChange(e);
 								updateFieldValue(kuId, id, e.target.value);
+								// Register highlights for validation
+								register(`fields.${index}.highlights`, {
+									validate: () =>
+										validateHighlights(fieldHighlights, id, required),
+								});
+								trigger(`fields.${index}.highlights`);
 							}}
 							onMouseEnter={() => setHoveredField(id)}
 							onMouseLeave={() => setHoveredField(null)}
+							required={required}
 						/>
 					)}
 				/>
@@ -120,28 +197,26 @@ const FieldInput = ({
 					name={`fields.${index}.value`}
 					control={control}
 					defaultValue=''
-					rules={{
-						required: required ? `${name} is required` : false,
-						pattern: {
-							value: /^[0-9]*$/,
-							message: 'Please enter a valid integer',
-						},
-					}}
-					render={({ field: renderField }) => (
+					rules={getValidationRules()}
+					render={({ field: renderField, fieldState }) => (
 						<TextField
 							{...renderField}
 							fullWidth
 							size='small'
 							label={name}
 							type='number'
-							error={!!errors.fields?.[index]?.value}
-							helperText={errors.fields?.[index]?.value?.message}
+							error={!!fieldState.error}
+							helperText={fieldState.error?.message}
 							onChange={(e) => {
 								renderField.onChange(e);
-								updateFieldValue(kuId, id, parseInt(e.target.value, 10));
+								const value =
+									e.target.value === '' ? '' : parseInt(e.target.value, 10);
+								updateFieldValue(kuId, id, value);
+								trigger(`fields.${index}.highlights`);
 							}}
 							onMouseEnter={() => setHoveredField(id)}
 							onMouseLeave={() => setHoveredField(null)}
+							required={required}
 						/>
 					)}
 				/>
@@ -155,29 +230,32 @@ const FieldInput = ({
 					name={`fields.${index}.value`}
 					control={control}
 					defaultValue=''
-					rules={{ required: required ? `${name} is required` : false }}
-					render={({ field: renderField }) => (
+					rules={getValidationRules()}
+					render={({ field: renderField, fieldState }) => (
 						<Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
 							<TextField
 								{...renderField}
 								fullWidth
 								size='small'
 								label={name}
-								error={!!errors.fields?.[index]?.value?.message}
-								helperText={errors.fields?.[index]?.value?.message}
+								error={!!fieldState.error}
+								helperText={fieldState.error?.message}
 								disabled={true}
 								value={
 									renderField.value
-										? JSON.stringify(renderField.value).substring(0, 20) + '...'
+										? typeof renderField.value === 'object'
+											? JSON.stringify(renderField.value).substring(0, 20) +
+											  '...'
+											: renderField.value
 										: ''
 								}
 								onMouseEnter={() => setHoveredField(id)}
 								onMouseLeave={() => setHoveredField(null)}
+								required={required}
 							/>
 							<IconButton
 								onClick={() => {
 									// Open custom field modal
-									// This will be implemented in the CustomFieldModal component
 									const openCustomFieldModal =
 										useAnnotationStore.getState().openCustomFieldModal;
 									openCustomFieldModal(kuId, id, type);
@@ -195,10 +273,12 @@ const FieldInput = ({
 
 		// Handle dropdown type (array of options)
 		if (Array.isArray(type)) {
-			// Check if it's a dynamic list
+			// Check if it's a dynamic list or special list type
 			const isDynamicList = type.some((t) => t.startsWith('DYNAMIC_'));
+			const isSpecialList = type.some((t) => t.startsWith('LIST_'));
+			const isList = isDynamicList || isSpecialList;
 
-			if (isDynamicList) {
+			if (isList) {
 				// Get all possible options from dynamic lists
 				let options: string[] = [];
 
@@ -208,10 +288,23 @@ const FieldInput = ({
 						if (dynamicLists[listName]) {
 							options = [...options, ...dynamicLists[listName]];
 						}
-					} else if (typeof t === 'string' && !t.startsWith('DYNAMIC_')) {
+					} else if (t === 'LIST_PERSON') {
+						// Map LIST_PERSON to DYNAMIC_PEOPLE
+						options = [...options, ...dynamicLists['DYNAMIC_PEOPLE']];
+					} else if (t === 'LIST_COMPANY') {
+						// Map LIST_COMPANY to DYNAMIC_ORG
+						options = [...options, ...dynamicLists['DYNAMIC_ORG']];
+					} else if (
+						typeof t === 'string' &&
+						!t.startsWith('DYNAMIC_') &&
+						!t.startsWith('LIST_')
+					) {
 						options.push(t);
 					}
 				});
+
+				// We don't need placeholder options anymore since we properly map list types
+				// to their data sources
 
 				// Render autocomplete for large lists
 				return (
@@ -219,8 +312,11 @@ const FieldInput = ({
 						name={`fields.${index}.value`}
 						control={control}
 						defaultValue={multiple ? [] : null}
-						rules={{ required: required ? `${name} is required` : false }}
-						render={({ field: { onChange, value, ...restField } }) => (
+						rules={getValidationRules()}
+						render={({
+							field: { onChange, value, ...restField },
+							fieldState,
+						}) => (
 							<Autocomplete
 								{...restField}
 								multiple={multiple}
@@ -231,14 +327,16 @@ const FieldInput = ({
 										{...params}
 										label={name}
 										size='small'
-										error={!!errors.fields?.[index]?.value}
-										helperText={errors.fields?.[index]?.value?.message}
+										error={!!fieldState.error}
+										helperText={fieldState.error?.message}
+										required={required}
 									/>
 								)}
 								value={value || (multiple ? [] : null)}
 								onChange={(_, newValue) => {
 									onChange(newValue);
 									updateFieldValue(kuId, id, newValue);
+									trigger(`fields.${index}.highlights`);
 								}}
 								filterOptions={(options, { inputValue }) => {
 									const filtered = options.filter((option) =>
@@ -259,12 +357,13 @@ const FieldInput = ({
 						name={`fields.${index}.value`}
 						control={control}
 						defaultValue={multiple ? [] : ''}
-						rules={{ required: required ? `${name} is required` : false }}
-						render={({ field: renderField }) => (
+						rules={getValidationRules()}
+						render={({ field: renderField, fieldState }) => (
 							<FormControl
 								fullWidth
 								size='small'
-								error={!!errors.fields?.[index]?.value}
+								error={!!fieldState.error}
+								required={required}
 								onMouseEnter={() => setHoveredField(id)}
 								onMouseLeave={() => setHoveredField(null)}
 							>
@@ -274,11 +373,17 @@ const FieldInput = ({
 									displayEmpty
 									renderValue={(selected) => {
 										if (multiple) {
+											// Ensure selected is always an array
+											const selectedArray = Array.isArray(selected)
+												? selected
+												: selected
+												? [selected]
+												: [];
 											return (
 												<Box
 													sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}
 												>
-													{(selected as string[]).map((value) => (
+													{selectedArray.map((value) => (
 														<Chip key={value} label={value} size='small' />
 													))}
 												</Box>
@@ -293,6 +398,7 @@ const FieldInput = ({
 									onChange={(e) => {
 										renderField.onChange(e);
 										updateFieldValue(kuId, id, e.target.value);
+										trigger(`fields.${index}.highlights`);
 									}}
 								>
 									{type.map((option) => (
@@ -301,10 +407,8 @@ const FieldInput = ({
 										</MenuItem>
 									))}
 								</Select>
-								{errors.fields?.[index]?.value && (
-									<FormHelperText>
-										{errors.fields?.[index]?.value?.message}
-									</FormHelperText>
+								{fieldState.error && (
+									<FormHelperText>{fieldState.error.message}</FormHelperText>
 								)}
 							</FormControl>
 						)}
@@ -337,11 +441,28 @@ const FieldInput = ({
 		highlights.forEach((highlight) => {
 			removeHighlight(highlight.id);
 		});
+
+		// Trigger validation after removing highlights
+		trigger(`fields.${index}.highlights`);
 	};
+
+	// Register highlights field for validation
+	register(`fields.${index}.highlights`, {
+		validate: () => validateHighlights(fieldHighlights, id, required),
+	});
 
 	return (
 		<Box
-			sx={{ display: 'flex', alignItems: 'center', mb: 2 }}
+			sx={{
+				display: 'flex',
+				alignItems: 'center',
+				mb: 2,
+				// Add highlight error state
+				...(hasHighlightError && {
+					pb: 2,
+					position: 'relative',
+				}),
+			}}
 			onMouseEnter={() => setHoveredField(id)}
 			onMouseLeave={() => setHoveredField(null)}
 		>
@@ -350,18 +471,26 @@ const FieldInput = ({
 			{/* Highlight button with badge showing count */}
 			<Badge
 				badgeContent={fieldHighlights.length}
-				color='primary'
+				color={hasHighlightError ? 'error' : 'primary'}
 				invisible={!hasHighlights}
 				sx={{ mx: 1 }}
 			>
 				<IconButton
 					sx={{
-						// Updated styling - removed border when focused, only show border when active
-						borderColor: isActive ? getFieldColor() : 'transparent',
-						borderWidth: isActive ? 1 : 0,
+						// Updated styling - show error state
+						borderColor: hasHighlightError
+							? 'error.main'
+							: isActive
+							? getFieldColor()
+							: 'transparent',
+						borderWidth: isActive || hasHighlightError ? 1 : 0,
 						borderStyle: 'solid',
 						// Handle icon color based on highlights
-						color: hasHighlights ? getFieldColor() : 'action.disabled',
+						color: hasHighlightError
+							? 'error.main'
+							: hasHighlights
+							? getFieldColor()
+							: 'action.disabled',
 						// Remove focus outline/border
 						'&:focus': {
 							outline: 'none',
@@ -401,6 +530,21 @@ const FieldInput = ({
 				>
 					<DeleteIcon />
 				</IconButton>
+			)}
+
+			{/* Only show highlight error message if there isn't already a field error shown */}
+			{hasHighlightError && !hasFieldError && (
+				<FormHelperText
+					error
+					sx={{
+						position: 'absolute',
+						bottom: 0,
+						left: 0,
+						ml: 0, // Remove default indentation
+					}}
+				>
+					Evidence highlighting required
+				</FormHelperText>
 			)}
 		</Box>
 	);

@@ -1,3 +1,4 @@
+// src/features/annotations/annotation-pane.tsx
 import React, { useState } from 'react';
 import {
 	Box,
@@ -6,10 +7,12 @@ import {
 	Menu,
 	MenuItem,
 	Paper,
+	Divider,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import useAnnotationStore from '../../store/use-annotation-store';
+import useAnnotationStore from '@/store/use-annotation-store';
 import KnowledgeUnitForm from './ku-form';
+import ValidationExport from './validation-export';
 import { useShallow } from 'zustand/shallow';
 
 const AnnotationPanel = () => {
@@ -42,7 +45,6 @@ const AnnotationPanel = () => {
 	// Handle adding a new KU
 	const handleAddKU = (schemaId: string) => {
 		addKnowledgeUnit(schemaId);
-		console.log('After addKnowledgeUnit:', useAnnotationStore.getState());
 		handleCloseMenu();
 	};
 
@@ -83,18 +85,13 @@ const AnnotationPanel = () => {
 
 				{selectedDocumentId && documentKUs.length > 0 && (
 					<Box>
-						{documentKUs.map((ku) => {
-							// const schema = knowledgeUnitSchemas.find(
-							// 	(s) => s.frameId === ku.schemaId
-							// );
-							return (
-								<KnowledgeUnitForm
-									key={ku.id}
-									kuId={ku.id}
-									schemaId={ku.schemaId}
-								/>
-							);
-						})}
+						{documentKUs.map((ku) => (
+							<KnowledgeUnitForm
+								key={ku.id}
+								kuId={ku.id}
+								schemaId={ku.schemaId}
+							/>
+						))}
 					</Box>
 				)}
 			</Box>
@@ -114,11 +111,11 @@ const AnnotationPanel = () => {
 					open={Boolean(anchorEl)}
 					onClose={handleCloseMenu}
 					anchorOrigin={{
-						vertical: 'top', // Change from 'bottom' to 'top'
+						vertical: 'top',
 						horizontal: 'left',
 					}}
 					transformOrigin={{
-						vertical: 'bottom', // Uncomment and set to 'bottom'
+						vertical: 'bottom',
 						horizontal: 'left',
 					}}
 				>
@@ -126,30 +123,17 @@ const AnnotationPanel = () => {
 						<MenuItem
 							key={schema.frameId}
 							onClick={() => handleAddKU(schema.frameId)}
-							sx={{ width: 285 }} // TODO: Fix temporary fixed width
+							sx={{ width: 285 }}
 						>
 							{schema.frameLabel}
 						</MenuItem>
 					))}
 				</Menu>
 
-				{/* Export button */}
-				<Button
-					variant='outlined'
-					fullWidth
-					sx={{ mt: 1 }}
-					disabled={!selectedDocumentId || documentKUs.length === 0}
-					onClick={() => {
-						const exportedData = useAnnotationStore
-							.getState()
-							.exportAnnotations();
-						console.log('Exported annotations:', exportedData);
-						// In a real app, you would save this to a file or send to server
-						alert('Annotations exported to console');
-					}}
-				>
-					Export Annotations
-				</Button>
+				<Divider sx={{ my: 2 }} />
+
+				{/* Replace the old Export button with the new ValidationExport component */}
+				<ValidationExport documentId={selectedDocumentId} />
 			</Box>
 		</Paper>
 	);
