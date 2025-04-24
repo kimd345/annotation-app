@@ -15,22 +15,24 @@ export const useFieldValidation = (
   const getValidationRules = (): ValidationRules => {
     const rules: ValidationRules = {};
 
-    // Required field validation with special handling for multiple select
+    // Required field validation with special handling for select fields
     if (required) {
-      if (Array.isArray(fieldType)) {
-        // For multiple select, validate array length instead of using 'required'
-        rules.validate = {
-          ...(rules.validate as Record<string, unknown>),
-          required: (value: unknown) => {
-            return (
-              (Array.isArray(value) && value.length > 0) ||
-              `${fieldName} is required`
-            );
-          },
-        };
-      } else {
-        rules.required = `${fieldName} is required`;
-      }
+      // For all field types, use a validate function instead of 'required'
+      rules.validate = {
+        ...(rules.validate as Record<string, unknown>),
+        required: (value: unknown) => {
+          if (Array.isArray(value)) {
+            // For multiple select - check array length
+            return value.length > 0 || `${fieldName} is required`;
+          } else if (typeof value === 'string' && Array.isArray(fieldType)) {
+            // For single select - check for non-empty string
+            return !!value || `${fieldName} is required`;
+          } else {
+            // For other fields
+            return (value !== undefined && value !== null && value !== '') || `${fieldName} is required`;
+          }
+        },
+      };
     }
 
     // Type-specific validation

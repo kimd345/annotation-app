@@ -4,7 +4,7 @@ import useAnnotationStore from '@/store/use-annotation-store';
 
 interface SelectFieldProps {
   index: number;
-  control: Control;
+  control: Control<any>;
   field: {
     id: string;
     name: string;
@@ -76,8 +76,9 @@ export const SelectField = ({
               );
             }}
             onChange={(e) => {
-              renderField.onChange(e);
-              updateFieldValue(kuId, id, e.target.value);
+              const value = e.target.value;
+              renderField.onChange(value);
+              updateFieldValue(kuId, id, value);
               triggerHighlightValidation();
             }}
           >

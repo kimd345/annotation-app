@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/shallow';
 import debounce from 'lodash/debounce';
 import useAnnotationStore from '@/store/use-annotation-store';
 
-export const useHighlighting = (containerRef: React.RefObject<HTMLElement>) => {
+export const useHighlighting = (containerRef: React.RefObject<HTMLElement | null>) => {
   const {
     selectedDocumentId,
     knowledgeUnits,

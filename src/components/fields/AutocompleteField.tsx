@@ -5,7 +5,7 @@ import { dynamicLists } from '@/lib/mock-data';
 
 interface AutocompleteFieldProps {
   index: number;
-  control: Control;
+  control: Control<any>;
   field: {
     id: string;
     name: string;
@@ -86,8 +86,10 @@ export const AutocompleteField = ({
           )}
           value={value || (multiple ? [] : null)}
           onChange={(_, newValue) => {
-            onChange(newValue);
-            updateFieldValue(kuId, id, newValue);
+            // Handle empty strings for single select
+            const formattedValue = multiple ? newValue : (newValue || '');
+            onChange(formattedValue);
+            updateFieldValue(kuId, id, formattedValue);
             triggerHighlightValidation();
           }}
           filterOptions={(options, { inputValue }) => {

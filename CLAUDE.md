@@ -23,8 +23,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Custom field types should implement validateCustomFieldHasValue
 
 ## Remaining Tasks
-- Refactor large components into maintainable modules
-- Refine TypeScript types to match linting and tsconfig, and fix TypeScript errors across files
+- <del>Refactor large components into maintainable modules</del>
+- <del>Refine TypeScript types to match linting and tsconfig, and fix TypeScript errors across files</del>
 - Replace mock data flow with tanstack-query integration to a simple backend server (with local JSON storage instead of a database) that supports infinite scroll for documents list and dynamic lists
 - Implement real-time JSON storage write to backend
 - Generate tests for all major units and user flows

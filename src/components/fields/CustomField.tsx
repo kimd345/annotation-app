@@ -5,7 +5,7 @@ import useAnnotationStore from '@/store/use-annotation-store';
 
 interface CustomFieldProps {
   index: number;
-  control: Control;
+  control: Control<any>;
   field: {
     id: string;
     name: string;
