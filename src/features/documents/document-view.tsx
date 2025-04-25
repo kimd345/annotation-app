@@ -150,7 +150,6 @@ const DocumentView = () => {
 					textAlign: 'left',
 					display: 'flex',
 					justifyContent: 'center',
-					alignItems: 'center',
 				}}
 				onMouseUp={
 					activeHighlightFieldId ? debouncedHandleTextSelection : undefined
