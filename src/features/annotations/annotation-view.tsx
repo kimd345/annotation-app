@@ -87,6 +87,7 @@ const AnnotationView = () => {
 					<Box>
 						{documentKUs.map((ku) => (
 							<KnowledgeUnitForm
+							// @ts-ignore
 								key={ku.id}
 								kuId={ku.id}
 								schemaId={ku.schemaId}

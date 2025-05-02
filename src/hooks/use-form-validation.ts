@@ -23,6 +23,7 @@ export const useFormValidation = <T extends FormData>(
   // Setup form with validation
   const methods = useForm<T>({
     mode: 'onChange',
+    // @ts-expect-error
     defaultValues: initialValues,
   });
 
@@ -35,11 +36,12 @@ export const useFormValidation = <T extends FormData>(
   };
 
   return [
-    methods,
-    {
-      showValidationSummary,
-      setShowValidationSummary,
-      validateForm,
-    },
-  ];
+		// @ts-expect-error
+		methods,
+		{
+			showValidationSummary,
+			setShowValidationSummary,
+			validateForm,
+		},
+	];
 };

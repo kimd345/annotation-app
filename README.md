@@ -1,190 +1,170 @@
-# Annotation App
+# Knowledge Unit Annotation Interface
 
-Left Panel: Paginated list
+This document outlines the approach for presenting the Knowledge Unit Annotation Interface application.
 
-Middle Panel: Scrollable list
+## Project Overview
 
-Right Panel: Scrollable list
+The Knowledge Unit Annotation Interface is a web application that allows users to annotate units of knowledge based on raw text files (e.g., emails). The system enables structured information extraction from unstructured documents through a three-panel interface:
 
-NoSQL like MongoDB might be better if the scope and intention involves handling nested or semi-structured data.
-ie. Document -> text -> highlight -> annotation -> fields
+1. **Left Panel**: Document list that displays available documents and indicates which ones have annotations
+2. **Middle Panel**: Document viewer that displays the selected document content with highlighted annotations
+3. **Right Panel**: Knowledge Unit (KU) editor that allows users to create, edit, and manage annotations
 
+## Data Model
 
----------------------------
-
-# Form Validation Implementation Guide
-
-This guide explains how validation has been implemented in the annotation application, following the requirements from the documentation.
-
-## Core Validation Requirements
-
-1. **Required Fields**
-   - All fields marked as `required: true` must have valid values
-   - Clear error messages are displayed near the relevant fields
-   - Form submission is blocked until all required fields are valid
-
-2. **Highlight Evidence**
-   - All fields with values require corresponding evidence highlights
-   - Visual indicators show when highlights are missing
-   - Badge counts show the number of highlights per field
-
-3. **Custom Type Validation**
-   - For custom types (like dates and locations), at least one field must have a value
-   - Custom validation logic prevents saving empty custom field objects
-
-4. **Field Type Validation**
-   - String fields validate text input
-   - Integer fields validate number format with regex pattern
-   - Dropdown fields only allow selection from provided options
-   - Dynamic lists are validated appropriately
-
-5. **Global Validation**
-   - The export function validates all Knowledge Units before allowing export
-   - A validation summary shows all errors across the document
-   - Knowledge Units can be individually validated
-
-## Implementation Details
-
-### 1. Form Setup with react-hook-form
-
-```tsx
-// Using FormProvider for form context
-const methods = useForm<FormData>({
-  mode: 'onChange', // Validate on change for immediate feedback
-  defaultValues: {
-    fields: ku?.fields.map(field => ({
-      id: field.id,
-      value: field.value || '',
-      highlights: field.highlights || []
-    })) || []
-  }
-});
+```
+┌───────────────┐       ┌───────────────────┐       ┌─────────────────┐
+│   Document    │       │   KnowledgeUnit   │       │  KnowledgeUnit  │
+├───────────────┤       ├───────────────────┤       │     Schema      │
+│ id            │       │ id                │       ├─────────────────┤
+│ title         │◄──┐   │ schemaId          │───────┤ frameId         │
+│ content       │   │   │ documentId        │       │ frameLabel      │
+│ fileName      │   │   │ fields            │       │ fields          │
+│ hasAnnotations│   │   └───────────────────┘       └─────────────────┘
+└───────────────┘   │             │                          │
+                    │             │                          │
+                    │             ▼                          ▼
+                    │   ┌───────────────────┐       ┌─────────────────┐
+                    │   │      Field        │       │   SchemaField   │
+                    │   ├───────────────────┤       ├─────────────────┤
+                    │   │ id                │       │ id              │
+                    │   │ name              │       │ name            │
+                    │   │ type              │◄──────┤ type            │
+                    │   │ required          │       │ required        │
+                    │   │ multiple          │       │ multiple        │
+                    │   │ value             │       └─────────────────┘
+                    │   │ highlights        │                │
+                    │   └───────────────────┘                │
+                    │             │                          │
+                    │             ▼                          ▼
+                    │   ┌───────────────────┐       ┌─────────────────┐
+                    │   │     Highlight     │       │  CustomField    │
+                    └───┤───────────────────┤       │     Type        │
+                        │ id                │       ├─────────────────┤
+                        │ startOffset       │       │ typeId          │
+                        │ endOffset         │       │ typeLabel       │
+                        │ text              │       │ fields          │
+                        │ fieldId           │       └─────────────────┘
+                        │ kuId              │
+                        └───────────────────┘
 ```
 
-### 2. Field Input Validation
+## Application Architecture
 
-Each field validates based on:
-- Required status
-- Field type (string, integer, array, custom)
-- Presence of highlights (when value exists)
+The application follows a modular architecture organized by feature:
 
-Example validation rules:
+### Core Structure
 
-```tsx
-const getValidationRules = () => {
-  const rules: any = {};
-  
-  // Required field validation
-  if (required) {
-    rules.required = `${name} is required`;
-  }
-  
-  // Type-specific validation
-  if (type === 'integer') {
-    rules.pattern = {
-      value: /^-?\d+$/,
-      message: 'Please enter a valid integer',
-    };
-  }
-  
-  // Add highlight validation
-  rules.validate = {
-    highlights: (value: any) => validateHighlights(fieldHighlights, id, required)
-  };
-  
-  return rules;
-};
+```
+src/
+│
+├── components/         # Reusable UI components
+│   ├── fields/         # Field-specific components
+│   ├── forms/          # Form-related components
+│   └── highlights/     # Highlighting components
+│
+├── features/           # Feature-specific modules
+│   ├── annotations/    # Annotation panel components
+│   └── documents/      # Document list and viewer components
+│
+├── hooks/              # Custom React hooks
+│
+├── lib/                # Utilities and mock data
+│   └── txt/            # Sample text documents
+│
+├── store/              # Zustand state management
+│
+├── types/              # TypeScript type definitions
+│
+└── utils/              # Utility functions
 ```
 
-### 3. Custom Field Type Validation
+### State Management
 
-For complex custom types like dates and locations:
+The application uses Zustand for state management, with a single store that manages:
 
-```tsx
-// Validate that at least one field has a value
-const hasValue = Object.values(data).some(
-  (value) => value !== null && value !== undefined && value !== ''
-);
+- Documents and their selection state
+- Knowledge Unit schemas and instances
+- Highlighting and annotation state
+- Custom field types and modal state
 
-if (!hasValue) {
-  setValidationError('At least one field must have a value');
-  return;
-}
-```
+### Key Technical Implementation Details
 
-### 4. Highlight Validation
+1. **Highlighting System**:
+   - Text selection in document creates highlights
+   - Highlights are stored with start/end offsets and linked to fields
+   - Hover states show related highlights across panels
 
-Highlighting is required for all fields with values:
+2. **Form Validation**:
+   - Required field validation
+   - Type-specific validation for different field types
+   - Highlight validation to ensure evidence is provided
 
-```tsx
-// Custom validation function for highlights
-const validateHighlights = (highlights: any[], fieldId: string, required: boolean) => {
-  // Skip validation for optional fields with no value
-  const fieldValue = getValues(`fields.${index}.value`);
-  const isEmpty = fieldValue === '' || fieldValue === null || 
-                 (Array.isArray(fieldValue) && fieldValue.length === 0);
-  
-  if (!required && isEmpty) {
-    return true;
-  }
-  
-  // All fields with values should have highlights
-  return highlights && highlights.length > 0 || 'Evidence highlighting required';
-};
-```
+3. **Custom Field Types**:
+   - Modal-based interface for complex field types (e.g., dates, locations)
+   - Field type composition and validation
 
-### 5. Error Display
+4. **Dynamic Fields**:
+   - Required fields shown by default
+   - Optional fields can be added/removed as needed
+   - Support for multiple field instances
 
-Errors are displayed in multiple ways:
-- Inline error messages under each field
-- Visual highlight indicators (color changes and badges)
-- Validation summary before export
+## Implementation Highlights
 
-## Validation Utility Functions
+Notable implementations:
 
-The `validation.ts` utility provides reusable validation functions:
+1. **Highlight System** (`src/hooks/use-highlighting.ts`)
+   - Text selection and offset calculation
+   - Highlight rendering and interaction
 
-1. `validateCustomFieldHasValue` - Ensures custom fields have at least one value
-2. `validateFieldValue` - Type-specific validation for different field types
-3. `validateFieldHighlights` - Ensures fields with values have highlights
-4. `validateKnowledgeUnit` - Complete validation of an entire Knowledge Unit
+2. **Form Validation** (`src/hooks/use-field-validation.ts`, `src/utils/validation.ts`)
+   - Field-type specific validation
+   - Required field handling
+   - Highlight validation
 
-## Pre-Export Validation
+3. **State Management** (`src/store/use-annotation-store.ts`)
+   - Unified store approach
+   - Action creators and state updates
+   - Cross-component state sharing
 
-The `ValidationExport` component:
-1. Validates all KUs in the document before export
-2. Shows a detailed summary of validation errors
-3. Only enables export when all validation passes
+4. **Dynamic UI** (`src/features/annotations/ku-form.tsx`)
+   - Form generation from schema
+   - Optional field handling
+   - Field type rendering
 
-## Integration Steps
+## Missing Features & Limitations
 
-To implement validation in your app:
+Limitations and missing features:
 
-1. Set up react-hook-form with appropriate validation modes
-2. Define validation rules for each field type
-3. Add visual error indicators
-4. Implement custom field validation logic
-5. Create utility functions for complex validation scenarios
-6. Add pre-export validation checks
+1. **Backend Integration**
+   - Currently uses local mock data
+   - Would need API integration for persistence and infinite scroll / pagination
+   - Missing real-time storage writes
 
-## Best Practices
+2. **Pagination/Infinite Scroll**
+   - Document list currently loads all documents
+   - Would need backend pagination support for large document sets
 
-- Use `mode: 'onChange'` for immediate feedback
-- Provide clear, specific error messages
-- Validate at multiple levels (field, KU, document)
-- Use visual indicators to show validation state
-- Prevent export/submission until validation passes
+3. **Test Coverage**
+   - Basic test structure in place
+   - Would expand test coverage for production
 
+## Technical Challenges & Solutions
 
+Technical challenges and solutions:
 
----------------------------
+1. **Text Highlighting**
+   - Challenge: Mapping text selections to document offsets
+   - Solution: Custom text offset calculation and non-overlapping highlight rendering
 
+2. **Form State Management**
+   - Challenge: Complex nested form state with validation
+   - Solution: Combination of React Hook Form and custom validation
 
+3. **Dynamic Field Types**
+   - Challenge: Supporting various field types with different behaviors
+   - Solution: Component composition and type-specific rendering
 
-
-
-
-
-
-
-
+4. **Performance**
+   - Challenge: Efficient rendering with potentially large documents
+   - Solution: Optimized highlight rendering and state management

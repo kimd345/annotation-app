@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { useShallow } from 'zustand/shallow';
 import debounce from 'lodash/debounce';
 import useAnnotationStore from '@/store/use-annotation-store';
