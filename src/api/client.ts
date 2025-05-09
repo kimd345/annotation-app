@@ -63,17 +63,17 @@ export const getDocumentAnnotations = async (documentId: string) => {
 	return response.data as KnowledgeUnit[];
 };
 
+// Use POST for both creating and updating knowledge units
+// The backend already handles both cases in the POST endpoint
 export const saveKnowledgeUnit = async (knowledgeUnit: KnowledgeUnit) => {
 	const response = await apiClient.post('/annotations', knowledgeUnit);
 	return response.data as KnowledgeUnit;
 };
 
+// For backward compatibility, keep updateKnowledgeUnit but use POST
 export const updateKnowledgeUnit = async (knowledgeUnit: KnowledgeUnit) => {
-	const response = await apiClient.put(
-		`/annotations/${knowledgeUnit.id}`,
-		knowledgeUnit
-	);
-	return response.data as KnowledgeUnit;
+	// Use the same saveKnowledgeUnit function which uses POST
+	return saveKnowledgeUnit(knowledgeUnit);
 };
 
 export const deleteKnowledgeUnit = async (id: string) => {
