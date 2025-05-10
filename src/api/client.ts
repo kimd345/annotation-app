@@ -77,6 +77,7 @@ export const updateKnowledgeUnit = async (knowledgeUnit: KnowledgeUnit) => {
 };
 
 export const deleteKnowledgeUnit = async (id: string) => {
+	console.log('Deleting knowledge unit with ID:', id);
 	await apiClient.delete(`/annotations/${id}`);
 	return id;
 };

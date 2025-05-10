@@ -1,14 +1,11 @@
-// src/features/annotations/field-input.tsx
+import { Control, FieldErrors, useFormContext } from 'react-hook-form';
 import {
-  Control,
-  FieldErrors,
-  useFormContext,
-} from 'react-hook-form';
-import {
-  Box,
-  FormHelperText,
-  IconButton,
-  Typography,
+	Box,
+	FormHelperText,
+	IconButton,
+	Typography,
+	Tooltip,
+	Alert,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useShallow } from 'zustand/shallow';
@@ -20,6 +17,7 @@ import CustomField from '@/components/fields/CustomField';
 import SelectField from '@/components/fields/SelectField';
 import AutocompleteField from '@/components/fields/AutocompleteField';
 import HighlightButton from '@/components/fields/HighlightButton';
+import { useKnowledgeUnitMutation } from '@/hooks/use-api';
 
 // Main field input component
 const FieldInput = ({
@@ -53,8 +51,25 @@ const FieldInput = ({
 	) => boolean | string;
 	required: boolean;
 }) => {
+	// Ensure field is defined before destructuring
+	if (!field) {
+		console.error('Field is undefined in FieldInput component', {
+			index,
+			kuId,
+		});
+		return (
+			<Alert severity='error' sx={{ mb: 2 }}>
+				Error: Field data is missing. Please refresh the page or contact
+				support.
+			</Alert>
+		);
+	}
+
 	const { type, name, id, multiple = false } = field;
 	const { trigger } = useFormContext();
+
+	// Get knowledge unit mutation hook for updating to backend
+	const kuMutation = useKnowledgeUnitMutation();
 
 	// Get field value and state from store
 	const {
@@ -73,13 +88,21 @@ const FieldInput = ({
 		}))
 	);
 
+	// Find the current knowledge unit
+	const currentKU = knowledgeUnits.find((ku) => ku.id === kuId);
+	if (!currentKU) {
+		console.error('Knowledge Unit not found', { kuId });
+		return (
+			<Alert severity='error' sx={{ mb: 2 }}>
+				Error: Knowledge Unit data is missing. Please refresh the page.
+			</Alert>
+		);
+	}
+
 	// Function to get field highlights
 	const getFieldHighlights = () => {
 		try {
-			const ku = knowledgeUnits.find((ku) => ku.id === kuId);
-			if (!ku) return [];
-
-			const fieldData = ku.fields.find((f) => f.id === id);
+			const fieldData = currentKU.fields.find((f) => f.id === id);
 			return fieldData?.highlights || [];
 		} catch (error) {
 			console.error('Error getting field highlights:', error);
@@ -122,6 +145,23 @@ const FieldInput = ({
 
 		// Trigger validation after removing highlights
 		trigger(`fields.${index}.highlights`);
+	};
+
+	// Function to handle field deletion
+	const handleDeleteField = () => {
+		// First, update the local state
+		removeFieldFromKU(kuId, id);
+
+		// Then get the updated KU and send it to the backend
+		setTimeout(() => {
+			const updatedKU = useAnnotationStore
+				.getState()
+				.knowledgeUnits.find((ku) => ku.id === kuId);
+
+			if (updatedKU) {
+				kuMutation.mutate(updatedKU);
+			}
+		}, 0);
 	};
 
 	// Register highlights field for validation
@@ -280,13 +320,15 @@ const FieldInput = ({
 
 			{/* Delete field button for optional fields */}
 			{!required && (
-				<IconButton
-					color='error'
-					onClick={() => removeFieldFromKU(kuId, id)}
-					aria-label='Remove field'
-				>
-					<DeleteIcon />
-				</IconButton>
+				<Tooltip title='Remove field'>
+					<IconButton
+						color='error'
+						onClick={handleDeleteField}
+						aria-label='Remove field'
+					>
+						<DeleteIcon />
+					</IconButton>
+				</Tooltip>
 			)}
 
 			{/* Only show highlight error message if there isn't already a field error shown */}

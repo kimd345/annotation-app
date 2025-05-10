@@ -1,4 +1,3 @@
-// src/features/annotations/ku-form.tsx
 import React, { useEffect } from 'react';
 import { FormProvider } from 'react-hook-form';
 import {
@@ -8,6 +7,7 @@ import {
 	Typography,
 	Divider,
 	CircularProgress,
+	Alert,
 } from '@mui/material';
 import { useShallow } from 'zustand/shallow';
 import useAnnotationStore from '@/store/use-annotation-store';
@@ -29,31 +29,32 @@ const KnowledgeUnitForm = ({
 	kuId: string;
 	schemaId: string;
 }) => {
-	const { knowledgeUnitSchemas, setActiveHighlightField } = useAnnotationStore(
-		useShallow((state) => ({
-			knowledgeUnitSchemas: state.knowledgeUnitSchemas,
-			setActiveHighlightField: state.setActiveHighlightField,
-		}))
-	);
-
-	// Fetch the current KU's data from the API
-	const { data: annotations, isLoading: isLoadingAnnotations } =
-		useDocumentAnnotationsQuery(
-			(annotations) =>
-				annotations.find((ku) => ku.id === kuId)?.documentId || null
+	const { knowledgeUnitSchemas, setActiveHighlightField, selectedDocumentId } =
+		useAnnotationStore(
+			useShallow((state) => ({
+				knowledgeUnitSchemas: state.knowledgeUnitSchemas,
+				setActiveHighlightField: state.setActiveHighlightField,
+				selectedDocumentId: state.selectedDocumentId,
+			}))
 		);
+
+	// Fetch annotations for the current document
+	const { data: annotations, isLoading: isLoadingAnnotations } =
+		useDocumentAnnotationsQuery(selectedDocumentId);
 
 	// Get the mutation for updating KUs
 	const kuMutation = useKnowledgeUnitMutation();
 
-	// Find the KU and its schema
+	// Find the specific KU by ID from the fetched annotations
 	const ku = annotations?.find((ku) => ku.id === kuId);
+
+	// Find the schema
 	const schema = knowledgeUnitSchemas.find((s) => s.frameId === schemaId);
 
 	// Setup form with validation
 	const [methods, validationState] = useFormValidation<FormData>({
 		fields:
-			ku?.fields.map((field) => ({
+			ku?.fields?.map((field) => ({
 				id: field.id,
 				value: field.value || '',
 				highlights: field.highlights || [],
@@ -72,7 +73,7 @@ const KnowledgeUnitForm = ({
 
 	// Re-initialize form when KU changes
 	useEffect(() => {
-		if (ku) {
+		if (ku && ku.fields) {
 			reset({
 				fields: ku.fields.map((field) => {
 					// Handle initialization for multiple select fields
@@ -104,7 +105,26 @@ const KnowledgeUnitForm = ({
 	}
 
 	if (!ku || !schema) {
-		return <Typography color='error'>Knowledge Unit not found</Typography>;
+		return (
+			<Card variant='outlined' sx={{ mb: 3, p: 4, textAlign: 'center' }}>
+				<Typography color='error'>Knowledge Unit not found</Typography>
+				<Typography variant='body2' color='textSecondary' sx={{ mt: 1 }}>
+					ID: {kuId}, Schema: {schemaId}
+				</Typography>
+			</Card>
+		);
+	}
+
+	// Validate that KU has fields array
+	if (!ku.fields || !Array.isArray(ku.fields)) {
+		console.error('KU has no fields array or fields is not an array', ku);
+		return (
+			<Card variant='outlined' sx={{ mb: 3, p: 4, textAlign: 'center' }}>
+				<Alert severity='error'>
+					Invalid knowledge unit data structure. The fields array is missing.
+				</Alert>
+			</Card>
+		);
 	}
 
 	// Custom validation function for highlights
@@ -200,11 +220,28 @@ const KnowledgeUnitForm = ({
 
 						{/* Render existing fields */}
 						{ku.fields.map((field, index) => {
+							// Skip if field is undefined
+							if (!field) {
+								console.error('Field is undefined', { index, kuId });
+								return (
+									<Alert
+										key={`missing-field-${index}`}
+										severity='error'
+										sx={{ mb: 2 }}
+									>
+										Invalid field data at index {index}
+									</Alert>
+								);
+							}
+
 							// Find schema field to get validation rules
 							const schemaField = schema.fields.find((f) => f.id === field.id);
 
 							return (
-								<Box key={field.id} data-field-id={field.id}>
+								<Box
+									key={field.id || `field-${index}`}
+									data-field-id={field.id}
+								>
 									<FieldInput
 										field={field}
 										index={index}

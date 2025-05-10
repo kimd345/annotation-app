@@ -65,18 +65,27 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		}));
 	},
 
-	// Same with adding fields - local state only
+	// Function to add a field to a knowledge unit
 	addFieldToKU: (kuId, fieldId) => {
 		const { knowledgeUnits, knowledgeUnitSchemas } = get();
 
 		const ku = knowledgeUnits.find((ku) => ku.id === kuId);
-		if (!ku) return;
+		if (!ku) {
+			console.error('KU not found:', kuId);
+			return;
+		}
 
 		const schema = knowledgeUnitSchemas.find((s) => s.frameId === ku.schemaId);
-		if (!schema) return;
+		if (!schema) {
+			console.error('Schema not found for KU:', ku.schemaId);
+			return;
+		}
 
 		const fieldSchema = schema.fields.find((f) => f.id === fieldId);
-		if (!fieldSchema) return;
+		if (!fieldSchema) {
+			console.error('Field schema not found:', fieldId);
+			return;
+		}
 
 		// Check if this is a custom field type
 		if (
@@ -85,18 +94,28 @@ const useAnnotationStore = create<AnnotationStore>((set, get) => ({
 		) {
 			// Open the modal instead of adding the field immediately
 			const openCustomFieldModal = get().openCustomFieldModal;
-			// @ts-expect-error
 			openCustomFieldModal(kuId, fieldId, fieldSchema.type, true);
 			return;
 		}
 
-		// For regular fields, add them immediately as before
+		// For regular fields, add them to the knowledge unit
+		console.log('Adding regular field to KU:', fieldSchema);
+
+		// Create a new field object with properly initialized values
+		const newField = {
+			...fieldSchema,
+			highlights: [],
+			// Initialize value based on field type and multiple flag
+			value: fieldSchema.multiple ? [] : '',
+		};
+
+		// Update the knowledge units state
 		set((state) => ({
 			knowledgeUnits: state.knowledgeUnits.map((ku) =>
 				ku.id === kuId
 					? {
 							...ku,
-							fields: [...ku.fields, { ...fieldSchema, highlights: [] }],
+							fields: [...ku.fields, newField],
 					  }
 					: ku
 			),

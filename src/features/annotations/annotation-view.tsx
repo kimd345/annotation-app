@@ -8,6 +8,8 @@ import {
 	Paper,
 	Divider,
 	CircularProgress,
+	Alert,
+	Snackbar,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import useAnnotationStore from '@/store/use-annotation-store';
@@ -22,30 +24,51 @@ import {
 
 const AnnotationView = () => {
 	const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+	const [error, setError] = useState<string | null>(null);
 
-	const { selectedDocumentId, setKnowledgeUnitSchemas, addKnowledgeUnit } =
-		useAnnotationStore(
-			useShallow((state) => ({
-				selectedDocumentId: state.selectedDocumentId,
-				setKnowledgeUnitSchemas: state.setKnowledgeUnitSchemas,
-				addKnowledgeUnit: state.addKnowledgeUnit,
-			}))
-		);
+	const {
+		selectedDocumentId,
+		setKnowledgeUnitSchemas,
+		addKnowledgeUnit,
+		setKnowledgeUnits,
+	} = useAnnotationStore(
+		useShallow((state) => ({
+			selectedDocumentId: state.selectedDocumentId,
+			// @ts-expect-error TODO: IDK
+			setKnowledgeUnitSchemas: state.setKnowledgeUnitSchemas,
+			addKnowledgeUnit: state.addKnowledgeUnit,
+			// @ts-expect-error TODO: IDK
+			setKnowledgeUnits: state.setKnowledgeUnits,
+		}))
+	);
 
 	// Fetch schemas and annotations
 	const {
 		data: schemas,
 		isLoading: isLoadingSchemas,
 		isError: isErrorSchemas,
+		error: schemasError,
 	} = useSchemasQuery();
 	const {
 		data: annotations,
 		isLoading: isLoadingAnnotations,
 		isError: isErrorAnnotations,
+		error: annotationsError,
 	} = useDocumentAnnotationsQuery(selectedDocumentId);
 
 	// Mutation for adding new KUs
 	const addKUMutation = useKnowledgeUnitMutation();
+
+	// Display error message if any error occurs
+	useEffect(() => {
+		if (isErrorSchemas) {
+			setError(`Error loading schemas: ${schemasError}`);
+		} else if (isErrorAnnotations) {
+			setError(`Error loading annotations: ${annotationsError}`);
+		} else {
+			setError(null);
+		}
+	}, [isErrorSchemas, isErrorAnnotations, schemasError, annotationsError]);
 
 	// Update the store with the schemas when they change
 	useEffect(() => {
@@ -53,6 +76,13 @@ const AnnotationView = () => {
 			setKnowledgeUnitSchemas(schemas);
 		}
 	}, [schemas, setKnowledgeUnitSchemas]);
+
+	// Update the store with annotations when they change
+	useEffect(() => {
+		if (annotations) {
+			setKnowledgeUnits(annotations);
+		}
+	}, [annotations, setKnowledgeUnits]);
 
 	// Handle opening KU type menu
 	const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -66,13 +96,31 @@ const AnnotationView = () => {
 
 	// Handle adding a new KU
 	const handleAddKU = (schemaId: string) => {
-		// Create the new KU locally
-		const newKU = addKnowledgeUnit(schemaId);
-		if (newKU) {
-			// Save it to the API
-			addKUMutation.mutate(newKU);
+		try {
+			// Create the new KU locally
+			const newKU = addKnowledgeUnit(schemaId);
+			if (newKU) {
+				// Save it to the API
+				addKUMutation.mutate(newKU, {
+					onError: (err) => {
+						console.error('Failed to add knowledge unit:', err);
+						setError(`Failed to add knowledge unit: ${err.message}`);
+					},
+				});
+			} else {
+				console.error('Failed to create new knowledge unit');
+				setError('Failed to create new knowledge unit');
+			}
+		} catch (err: any) {
+			console.error('Error adding knowledge unit:', err);
+			setError(`Error adding knowledge unit: ${err.message}`);
 		}
 		handleCloseMenu();
+	};
+
+	// Handle error snackbar close
+	const handleCloseError = () => {
+		setError(null);
 	};
 
 	// Loading and error states
@@ -102,9 +150,9 @@ const AnnotationView = () => {
 						<CircularProgress />
 					</Box>
 				) : isError ? (
-					<Typography color='error' align='center' sx={{ py: 4 }}>
-						Error loading data. Please try again.
-					</Typography>
+					<Alert severity='error' sx={{ py: 4 }}>
+						{error || 'Error loading data. Please try again.'}
+					</Alert>
 				) : !selectedDocumentId ? (
 					<Typography color='text.secondary' align='center' sx={{ py: 4 }}>
 						Select a document to add annotations
@@ -166,6 +214,23 @@ const AnnotationView = () => {
 				{/* Replace the old Export button with the new ValidationExport component */}
 				<ValidationExport documentId={selectedDocumentId} />
 			</Box>
+
+			{/* Error Snackbar */}
+			<Snackbar
+				open={!!error}
+				autoHideDuration={6000}
+				onClose={handleCloseError}
+				message={error}
+				anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+			>
+				<Alert
+					onClose={handleCloseError}
+					severity='error'
+					sx={{ width: '100%' }}
+				>
+					{error}
+				</Alert>
+			</Snackbar>
 		</Paper>
 	);
 };
